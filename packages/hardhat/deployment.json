@@ -1,0 +1,7 @@
+{
+  "network": "alfajores",
+  "addresses": {
+    "simpleBetManager": "0x910273a1E3396e728CDe8B0748Fe1C0A36501BDA",
+    "stakingToken": "0x765DE816845861e75A25fCA122bb6898B8B1282a"
+  }
+}
