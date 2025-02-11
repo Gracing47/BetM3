@@ -2,6 +2,10 @@ import { useWeb3 } from "@/contexts/useWeb3";
 import { useEffect, useState } from "react";
 import BetCreation from "@/components/BetCreation";
 import ActiveBets from "@/components/ActiveBets";
+import Layout from "@/components/Layout";
+import BetDisplay from "@/components/BetDisplay";
+import ProfileView from "@/components/ProfileView";
+import LeaderboardComponent from "@/components/LeaderboardComponent";
 
 export default function Home() {
   const { address, getUserAddress, getCUSDBalance } = useWeb3();
@@ -43,9 +47,8 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center mb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
             No-Loss Betting on Celo
           </h1>
@@ -54,18 +57,18 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           {walletError ? (
             <div className="text-red-500 font-medium">{walletError}</div>
           ) : address ? (
             <div className="space-y-2">
-              <div className="inline-block px-4 py-2 bg-white rounded-lg shadow-sm">
-                <span className="text-gray-600">Connected: </span>
+              <div className="inline-block px-4 py-2 bg-primaryLight rounded-lg shadow-sm">
+                <span className="text-gray-900">Connected: </span>
                 <span className="font-mono text-sm">{address}</span>
               </div>
               {balance && (
                 <div className="flex flex-col items-center space-y-1">
-                  <div className="text-sm font-medium text-gray-600">Balance: {balance}</div>
+                  <div className="text-sm font-medium text-gray-900">Balance: {balance}</div>
                   <a 
                     href="https://celo.org/developers/faucet" 
                     target="_blank" 
@@ -87,17 +90,31 @@ export default function Home() {
           )}
         </div>
 
-        {address && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div>
-              <BetCreation />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-8">
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+              <BetDisplay bets={[]} />
             </div>
-            <div>
-              <ActiveBets />
+            {address && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <BetCreation />
+                </div>
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <ActiveBets />
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="lg:col-span-4 space-y-8">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <ProfileView />
+            </div>
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <LeaderboardComponent />
             </div>
           </div>
-        )}
+        </div>
       </div>
-    </div>
   );
 }

@@ -1,22 +1,17 @@
-import { FC, ReactNode } from "react";
-import Footer from "./Footer";
-import Header from "./Header";
+import React from 'react';
+import Header from './Header';
+import Footer from './Footer';
 
-interface Props {
-    children: ReactNode;
-}
-const Layout: FC<Props> = ({ children }) => {
-    return (
-        <>
-            <div className="bg-gypsum overflow-hidden flex flex-col min-h-screen">
-                <Header />
-                <div className="py-16 max-w-7xl mx-auto space-y-8 sm:px-6 lg:px-8">
-                    {children}
-                </div>
-                <Footer />
-            </div>
-        </>
-    );
+const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <div className="flex flex-col min-h-screen bg-gray-50">
+      <Header />
+      <main className="flex-grow py-8">
+        {children}
+      </main>
+      <Footer />
+    </div>
+  );
 };
 
 export default Layout;

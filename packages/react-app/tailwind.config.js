@@ -8,12 +8,10 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        colors: {
-          primary: "#1BB775",
-          disableCard: "#C8D0CB",
-          primaryLight: "#CFF2E5",
-          secondary: "#DFFC70",
-        },
+        primary: "#1BB775",    /* Main brand/action color */
+        disableCard: "#C8D0CB", /* Disabled state */
+        primaryLight: "#CFF2E5", /* Light variant */
+        secondary: "#DFFC70"    /* Accent color */
       },
     },
   },
