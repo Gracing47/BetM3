@@ -3999,7 +3999,7 @@ ethers@^5.7.2:
     "@ethersproject/web" "5.7.1"
     "@ethersproject/wordlists" "5.7.0"
 
-ethers@^6.1.0, ethers@^6.10.0, ethers@^6.11.0, ethers@^6.4.0, ethers@6.x:
+ethers@^6.1.0, ethers@^6.11.0, ethers@^6.13.5, ethers@^6.4.0, ethers@6.x:
   version "6.13.5"
   resolved "https://registry.npmjs.org/ethers/-/ethers-6.13.5.tgz"
   integrity sha512-+knKNieu5EKRThQJWwqaJ10a6HE9sSehGeqWN65//wE7j47ZpFhKAnHB/JJFibwwg61I/koxaPsXbXpD/skNOQ==
@@ -4549,7 +4549,7 @@ hardhat-gas-reporter@^1.0.8:
   resolved "file:packages/hardhat"
   dependencies:
     "@nomicfoundation/hardhat-ethers" "^3.0.5"
-    "@openzeppelin/contracts" "^5.2.0"
+    "@openzeppelin/contracts" "^4.9.3"
     dotenv "^16.4.3"
     ethers "^6.11.0"
 

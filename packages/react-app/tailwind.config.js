@@ -8,10 +8,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: "#1BB775",    /* Main brand/action color */
-        disableCard: "#C8D0CB", /* Disabled state */
+        primary: "#1BB775",      /* Main brand/action color */
+        "primary-dark": "#158F5C", /* Darker variant for hover states */
+        disableCard: "#C8D0CB",  /* Disabled state */
         primaryLight: "#CFF2E5", /* Light variant */
-        secondary: "#DFFC70"    /* Accent color */
+        secondary: "#DFFC70"     /* Accent color */
       },
     },
   },

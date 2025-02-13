@@ -1,36 +1,49 @@
-import { Disclosure } from "@headlessui/react";
-import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
+import React from 'react';
+import { useWeb3 } from '../contexts/useWeb3';
+import { formatAddress } from '../utils/format';
 
-export default function Header() {
+const Header: React.FC = () => {
+  const { address, getUserAddress } = useWeb3();
+
+  const handleConnect = async () => {
+    try {
+      await getUserAddress();
+    } catch (err) {
+      console.error('Error connecting wallet:', err);
+    }
+  };
+
   return (
-    <header className="bg-secondary border-b border-gray-200">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
+    <header className="bg-white shadow-sm">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="flex justify-between items-center">
           <div className="flex items-center">
-            <span className="text-2xl font-bold text-gray-900">🎲 BetM3</span>
+            <div className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <span role="img" aria-label="dice" className="text-3xl">🎲</span>
+              <span>BetM3</span>
+            </div>
           </div>
-          <nav className="hidden sm:flex sm:space-x-8">
-            <a className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 border-b-2 border-primary">
-              Home
-            </a>
-          </nav>
-          <div className="flex sm:hidden">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-900 hover:text-gray-700 hover:bg-primaryLight focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
-            >
-              <span className="sr-only">Open main menu</span>
-              <Bars3Icon className="block h-6 w-6" aria-hidden="true" />
-            </button>
+
+          <div>
+            {address ? (
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
+                  {formatAddress(address)}
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={handleConnect}
+                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+              >
+                Connect Wallet
+              </button>
+            )}
           </div>
         </div>
       </div>
     </header>
   );
-}
+};
 
-declare global {
-  interface Window {
-    ethereum: any;
-  }
-}
+export default Header;

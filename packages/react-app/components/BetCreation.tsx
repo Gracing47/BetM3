@@ -1,10 +1,80 @@
 import { useState } from "react";
 import { useWeb3 } from "../contexts/useWeb3";
-import PrimaryButton from "./Button";
+import Button from "./Button";
+import { formatTokenAmount } from "../utils/format";
+
+const SUGGESTED_AMOUNTS = [10, 50, 100, 500];
+const SUGGESTED_DURATIONS = [
+  { label: '1 Day', value: 1 },
+  { label: '3 Days', value: 3 },
+  { label: '1 Week', value: 7 },
+  { label: '2 Weeks', value: 14 },
+];
+
+interface ConfirmationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  data: {
+    stakeAmount: string;
+    duration: string;
+    condition: string;
+  };
+}
+
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  data,
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full">
+        <h3 className="text-xl font-bold mb-4">Confirm Bet Creation</h3>
+        
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm text-gray-600">Stake Amount</p>
+            <p className="font-semibold">{formatTokenAmount(data.stakeAmount)}</p>
+          </div>
+          
+          <div>
+            <p className="text-sm text-gray-600">Duration</p>
+            <p className="font-semibold">{data.duration} days</p>
+          </div>
+          
+          <div>
+            <p className="text-sm text-gray-600">Condition</p>
+            <p className="font-semibold">{data.condition}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const BetCreation = () => {
   const { createBet, address, getUserAddress, approveToken } = useWeb3();
   const [loading, setLoading] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [formData, setFormData] = useState({
     stakeAmount: "",
     duration: "",
@@ -21,7 +91,21 @@ export const BetCreation = () => {
     setError("");
   };
 
-  const handleSubmit = async () => {
+  const handleSuggestedAmount = (amount: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      stakeAmount: amount.toString(),
+    }));
+  };
+
+  const handleSuggestedDuration = (days: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      duration: days.toString(),
+    }));
+  };
+
+  const handleCreateBet = async () => {
     setError("");
 
     if (!address) {
@@ -38,8 +122,13 @@ export const BetCreation = () => {
       return;
     }
 
+    setShowConfirmation(true);
+  };
+
+  const handleConfirmedCreate = async () => {
     try {
       setLoading(true);
+      setShowConfirmation(false);
       
       // First approve token spending
       try {
@@ -72,7 +161,7 @@ export const BetCreation = () => {
   };
 
   return (
-    <div className="max-w-lg mx-auto p-6 bg-white rounded-lg shadow-md">
+    <div id="bet-creation" className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-2xl font-bold mb-6 text-gray-800">Create New Bet</h2>
       
       <form className="space-y-6">
@@ -91,11 +180,27 @@ export const BetCreation = () => {
             min="0"
             step="0.01"
           />
+          <div className="mt-2 flex flex-wrap gap-2">
+            {SUGGESTED_AMOUNTS.map((amount) => (
+              <button
+                key={amount}
+                type="button"
+                onClick={() => handleSuggestedAmount(amount)}
+                className={`px-3 py-1 text-sm rounded-full border ${
+                  formData.stakeAmount === amount.toString()
+                    ? 'bg-primary text-white border-primary'
+                    : 'border-gray-300 hover:border-primary'
+                }`}
+              >
+                {amount} cUSD
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>
           <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-1">
-            Duration (Days)
+            Duration
           </label>
           <input
             type="number"
@@ -107,6 +212,22 @@ export const BetCreation = () => {
             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary"
             min="1"
           />
+          <div className="mt-2 flex flex-wrap gap-2">
+            {SUGGESTED_DURATIONS.map(({ label, value }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => handleSuggestedDuration(value)}
+                className={`px-3 py-1 text-sm rounded-full border ${
+                  formData.duration === value.toString()
+                    ? 'bg-primary text-white border-primary'
+                    : 'border-gray-300 hover:border-primary'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>
@@ -118,19 +239,22 @@ export const BetCreation = () => {
             name="condition"
             value={formData.condition}
             onChange={handleInputChange}
-            placeholder="Enter the bet condition"
+            placeholder="Describe what this bet is about..."
             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary"
             rows={3}
           />
+          <p className="mt-1 text-sm text-gray-500">
+            Be specific about the condition and how the winner will be determined.
+          </p>
         </div>
 
         {error && (
           <div className="text-red-500 text-sm">{error}</div>
         )}
 
-        <PrimaryButton
+        <Button
           title="Create Bet"
-          onClick={handleSubmit}
+          onClick={handleCreateBet}
           disabled={loading}
           loading={loading}
           widthFull
@@ -138,10 +262,21 @@ export const BetCreation = () => {
       </form>
 
       <div className="mt-4 text-sm text-gray-600">
-        <p>Note: Winner takes all stakes as reward. Create or join a bet to get started!</p>
+        <p className="font-medium mb-2">How it works:</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Create a bet by setting an amount and duration</li>
+          <li>Share with friends to join</li>
+          <li>Winner takes all stakes as reward</li>
+          <li>Your stake is safe until the bet ends</li>
+        </ul>
       </div>
+
+      <ConfirmationModal
+        isOpen={showConfirmation}
+        onClose={() => setShowConfirmation(false)}
+        onConfirm={handleConfirmedCreate}
+        data={formData}
+      />
     </div>
   );
 };
-
-export default BetCreation;
