@@ -1,38 +1,108 @@
-# React Framework + NextJS | Celo Composer
+# BetM3 - Risk-Free Social Betting on Celo
 
-Celo Composer support React boilerplate template with TailwindCSS. This is a starter kit with no additional boilerplate code. It's a perfect starter kit to get your project started on Celo blockchain.
+BetM3 is a decentralized betting platform built on Celo that combines social betting with yield generation. Create and join bets with friends while your stakes generate yield through Ubeswap integration.
 
-## Setup & Installation
+## Features
 
+- 🎲 **Risk-Free Betting**: All stakes are preserved through yield generation
+- 🏆 **Winner Takes Yield**: Winners earn rewards from generated yield
+- 👥 **Social Betting**: Create and join bets with friends
+- 📈 **Yield Generation**: Stakes earn yield through Ubeswap
+- 🔒 **Secure**: Built on Celo blockchain with smart contract security
+
+## Screenshots
+
+### Before Wallet Connection
+![Frontend Not Connected](packages/react-app/public/Frontend_not_connected.jpg)
+
+### After Wallet Connection
+![Frontend Connected](packages/react-app/public/Frontend_connected.jpg)
+
+## Quick Start
+
+1. Clone the repository:
 ```bash
-yarn
+git clone https://github.com/Gracing47/BetM3.git
+cd BetM3
 ```
 
-Run `yarn` or `npm install` to install all the required dependencies to run the dApp.
-
-> React + Tailwind CSS Template does not have any dependency on hardhat and truffle.
-> This starterkit does not include connection of Hardhat/Truffle with ReactJS. It's up to the user to integrate smart contract with ReactJS. This gives user more flexibily over the dApp.
-
--   To start the dApp, run the following command.
-
+2. Install dependencies:
 ```bash
-yarn react-dev
+cd packages/react-app
+npm install
 ```
 
-## Dependencies
+3. Start the development server:
+```bash
+npm run dev
+```
 
-### Default
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
--   [Next.js](https://nextjs.org/) app framework
--   [TailwindCSS](https://tailwindcss.com/) for UI
--   [rainbowkit-celo](https://www.npmjs.com/package/@celo/rainbowkit-celo), a plugin to help rainbowkit developers support the CELO protocol faster.
+## Smart Contracts
 
-## Architecture
+- SimpleBetManager: `0x910273a1E3396e728CDe8B0748Fe1C0A36501BDA`
+- cUSD Token: `0x765DE816845861e75A25fCA122bb6898B8B1282a`
 
--   `/pages` includes the main application components (specifically `index.tsx` and `_app.tsx`)
-    -   `_app.tsx` includes configuration
-    -   `index.tsx` is the main page of the application
--   `/components` includes components that are rendered in `index.tsx`
--   `/public` includes static files
-# BetM3
-# BetM3
+## How It Works
+
+1. **Create a Bet**
+   - Set stake amount in cUSD
+   - Define bet duration
+   - Specify bet condition
+   - Share with friends
+
+2. **Join a Bet**
+   - Connect your wallet
+   - Approve token spending
+   - Join existing bets
+   - Track your stakes
+
+3. **Earn Rewards**
+   - Stakes generate yield
+   - Winners earn rewards
+   - Everyone keeps their stake
+   - No risk of losing principal
+
+## Development
+
+### Project Structure
+```
+packages/
+├── hardhat/          # Smart contracts and tests
+└── react-app/        # Frontend application
+    ├── components/   # React components
+    ├── contexts/     # Web3 and app contexts
+    ├── pages/        # Next.js pages
+    └── utils/        # Utility functions
+```
+
+### Technologies Used
+- Next.js + TypeScript
+- Tailwind CSS
+- ethers.js v6
+- Hardhat
+- Celo SDK
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Resources
+
+- [Documentation](/team)
+- [Celo Developer Resources](https://docs.celo.org/)
+- [Ubeswap Documentation](https://docs.ubeswap.io/)
+
+## Contact
+
+- Project Updates: [Warpcast](https://warpcast.com/gracify)
+- Technical Support: [GitHub Issues](https://github.com/Gracing47/BetM3/issues)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
