@@ -1,23 +1,41 @@
-import "@nomicfoundation/hardhat-toolbox";
-import dotenv from "dotenv";
 import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox";
+import "@nomicfoundation/hardhat-chai-matchers";
+import "@typechain/hardhat";
+import "hardhat-dependency-compiler";
+import * as dotenv from "dotenv";
 
 dotenv.config();
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY as string;
-
-if (!PRIVATE_KEY) {
-  throw new Error("PRIVATE_KEY is not set");
-}
-
 const config: HardhatUserConfig = {
-  solidity: "0.8.20",
+  solidity: {
+    compilers: [
+      {
+        version: "0.8.20",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200
+          },
+          evmVersion: "paris"
+        }
+      }
+    ]
+  },
   networks: {
-    alfajores: {
-      url: "https://alfajores-forno.celo-testnet.org",
-      accounts: [PRIVATE_KEY],
+    hardhat: {
+      chainId: 31337,
     },
   },
+  paths: {
+    sources: "./contracts",
+    tests: "./test",
+    cache: "./cache",
+    artifacts: "./artifacts"
+  },
+  dependencyCompiler: {
+    paths: ["@openzeppelin/contracts/token/ERC20/ERC20.sol"]
+  }
 };
 
 export default config;

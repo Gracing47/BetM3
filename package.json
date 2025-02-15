@@ -26,5 +26,11 @@
   "keywords": [
     "celo-composer",
     "celo"
-  ]
+  ],
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "keccak",
+      "secp256k1"
+    ]
+  }
 }

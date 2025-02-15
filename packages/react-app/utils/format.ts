@@ -1,3 +1,5 @@
+import { ethers } from 'ethers';
+
 /**
  * Formats an Ethereum address for display by showing the first 6 and last 4 characters
  * @param address The Ethereum address to format
@@ -53,11 +55,28 @@ export const formatDuration = (seconds: number): string => {
 /**
  * Formats an amount of tokens to a human-readable string
  * @param amount The amount in wei
- * @param symbol The token symbol (e.g., "cUSD")
+ * @param symbol The token symbol (e.g., "CELO")
  * @returns Formatted token amount string
  */
-export const formatTokenAmount = (amount: string | number, symbol: string = 'cUSD'): string => {
-  const value = typeof amount === 'string' ? parseFloat(amount) : amount;
-  const formatted = formatNumber(value / 1e18);
-  return `${formatted} ${symbol}`;
+export const formatTokenAmount = (amount: string | number, symbol: string = 'CELO'): string => {
+  try {
+    // Always treat the input as wei and format it to CELO
+    const formatted = ethers.formatUnits(amount.toString(), 18);
+    // Format to 4 decimal places
+    const value = parseFloat(formatted).toFixed(4);
+    return `${value} ${symbol}`;
+  } catch (err) {
+    console.error("Error formatting token amount:", err);
+    return `0 ${symbol}`;
+  }
+};
+
+// Add helper function to convert CELO to wei
+export const toWei = (amount: string | number): string => {
+  try {
+    return ethers.parseUnits(amount.toString(), 18).toString();
+  } catch (err) {
+    console.error("Error converting to wei:", err);
+    throw new Error("Invalid amount format");
+  }
 };

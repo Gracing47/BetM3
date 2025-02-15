@@ -1,24 +1,36 @@
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from 'react';
 import { useWeb3 } from "../contexts/useWeb3";
 import BetDisplay from "./BetDisplay";
 import { formatTokenAmount } from "../utils/format";
+import { ethers } from 'ethers';
+import { SimpleBetManagerABI } from "../abis/SimpleBetManagerABI";
+
+// Füge die Contract-Adresse hinzu
+const SIMPLE_BET_MANAGER_ADDRESS = "0x910273a1E3396e728CDe8B0748Fe1C0A36501BDA";
 
 interface Bet {
   id: string;
   creator: string;
-  stakeAmount: bigint;
-  totalStaked: bigint;
-  startTime: bigint;
-  endTime: bigint;
-  status: number;
+  stakeAmount: string;
+  totalStaked: string;
+  startTime: number;
+  endTime: number;
+  status: string;
   condition: string;
-  winner: string;
   participants: string[];
 }
 
-const statusToString = (status: number): 'Created' | 'Active' | 'Completed' | 'Cancelled' => {
+interface BetEvent {
+  betId: string;
+  creator: string;
+  stakeAmount: string;
+  endTime: number;
+  condition: string;
+}
+
+const statusToString = (status: string): 'Created' | 'Active' | 'Completed' | 'Cancelled' => {
   const statuses = ['Created', 'Active', 'Completed', 'Cancelled'];
-  return statuses[status] as 'Created' | 'Active' | 'Completed' | 'Cancelled';
+  return statuses[Number(status)] as 'Created' | 'Active' | 'Completed' | 'Cancelled';
 };
 
 export const ActiveBets = () => {
@@ -29,35 +41,90 @@ export const ActiveBets = () => {
   const [filter, setFilter] = useState<'all' | 'created' | 'active' | 'completed'>('all');
 
   useEffect(() => {
-    const loadBets = async () => {
+    const loadBetsFromEvents = async () => {
       try {
-        // For testing, create a dummy bet ID
-        const dummyBetId = "0x1234567890123456789012345678901234567890123456789012345678901234";
-        const details = await getBetDetails(dummyBetId);
-        const participants = await getBetParticipants(dummyBetId);
-        
-        setBets([{
-          id: dummyBetId,
-          creator: details[0],
-          stakeAmount: details[1],
-          totalStaked: details[2],
-          startTime: details[3],
-          endTime: details[4],
-          status: details[5],
-          condition: details[6],
-          winner: details[7],
-          participants
-        }]);
+        const provider = new ethers.JsonRpcProvider('https://alfajores-forno.celo-testnet.org');
+        const betManager = new ethers.Contract(
+          SIMPLE_BET_MANAGER_ADDRESS,
+          SimpleBetManagerABI.abi,
+          provider
+        );
+
+        // Get block number for filtering
+        const currentBlock = await provider.getBlockNumber();
+        const fromBlock = Math.max(0, currentBlock - 100000); // Increase block range
+        console.log("Searching for events from block", fromBlock, "to", currentBlock);
+
+        // Get past BetCreated events
+        const filter = betManager.filters.BetCreated();
+        const events = await betManager.queryFilter(filter, fromBlock, currentBlock);
+        console.log("Found events:", events);
+
+        if (events.length === 0) {
+          console.log("No events found in the specified block range");
+          return;
+        }
+
+        const betPromises = events.map(async (event: any) => {
+          try {
+            const betId = event.args[0]; // First argument is betId
+            console.log("Processing bet ID:", betId.toString());
+
+            const details = await betManager.getBetDetails(betId);
+            console.log("Got details for bet", betId.toString(), ":", details);
+
+            // Skip if bet doesn't exist
+            if (!details || !details.creator) {
+              console.log("No valid details found for bet:", betId.toString());
+              return null;
+            }
+
+            let participants: string[] = [];
+            try {
+              participants = await betManager.getBetParticipants(betId);
+              console.log("Got participants for bet", betId.toString(), ":", participants);
+            } catch (err) {
+              console.warn("Could not get participants for bet", betId.toString(), err);
+            }
+
+            // Convert status number to string
+            const statusIndex = Number(details.status || 0);
+            const status = ['Created', 'Active', 'Completed', 'Cancelled'][statusIndex];
+
+            return {
+              id: betId.toString(),
+              creator: details.creator,
+              stakeAmount: details.stakeAmount.toString(),
+              totalStaked: details.totalStaked.toString(),
+              startTime: Number(details.startTime),
+              endTime: Number(details.endTime),
+              status,
+              condition: details.condition,
+              participants,
+            };
+          } catch (err) {
+            console.error("Error processing bet:", event, err);
+            return null;
+          }
+        });
+
+        const loadedBets = await Promise.all(betPromises);
+        const validBets = loadedBets.filter((bet): bet is Bet => bet !== null);
+        console.log("Valid bets loaded:", validBets);
+
+        // Sort bets by creation time (newest first)
+        const sortedBets = validBets.sort((a, b) => b.startTime - a.startTime);
+        setBets(sortedBets);
       } catch (err) {
-        console.error("Error loading bets:", err);
-        setError("Failed to load bets");
+        console.error("Error loading bets from events:", err);
+        setError("Failed to load bets. Please try again later.");
       }
     };
 
     if (address) {
-      loadBets();
+      loadBetsFromEvents();
     }
-  }, [address, getBetDetails, getBetParticipants]);
+  }, [address]);
 
   const handleJoinBet = async (bet: Bet) => {
     if (!address) {
@@ -70,7 +137,7 @@ export const ActiveBets = () => {
 
     try {
       // First approve token spending
-      const approveTx = await approveToken(bet.stakeAmount.toString());
+      const approveTx = await approveToken(bet.stakeAmount);
       await approveTx.wait();
 
       // Then join the bet
@@ -86,7 +153,7 @@ export const ActiveBets = () => {
           ? {
               ...b,
               totalStaked: updatedDetails[2],
-              status: updatedDetails[5],
+              status: updatedDetails[6],
               participants
             }
           : b
@@ -118,7 +185,7 @@ export const ActiveBets = () => {
         b.id === bet.id 
           ? {
               ...b,
-              status: updatedDetails[5]
+              status: updatedDetails[6]
             }
           : b
       ));
@@ -130,11 +197,12 @@ export const ActiveBets = () => {
     }
   };
 
+  // Filter bets based on status
   const filteredBets = bets.filter(bet => {
     if (filter === 'all') return true;
-    if (filter === 'created') return bet.status === 0;
-    if (filter === 'active') return bet.status === 1;
-    if (filter === 'completed') return bet.status === 2;
+    if (filter === 'created') return bet.status === 'Created';
+    if (filter === 'active') return bet.status === 'Active';
+    if (filter === 'completed') return bet.status === 'Completed';
     return true;
   });
 
@@ -170,14 +238,7 @@ export const ActiveBets = () => {
         {filteredBets.map(bet => (
           <BetDisplay
             key={bet.id}
-            bet={{
-              id: bet.id,
-              participants: bet.participants,
-              stakeAmount: Number(formatTokenAmount(bet.stakeAmount.toString())),
-              endTime: Number(bet.endTime),
-              condition: bet.condition,
-              status: statusToString(bet.status)
-            }}
+            bet={bet}
             onJoin={() => handleJoinBet(bet)}
           />
         ))}

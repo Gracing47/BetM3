@@ -3,22 +3,24 @@ import { useWeb3 } from '../contexts/useWeb3';
 import { formatAddress, formatTokenAmount } from '../utils/format';
 
 const ProfileView: React.FC = () => {
-  const { address, getCUSDBalance } = useWeb3();
+  const { address, getCELOBalance } = useWeb3();
   const [balance, setBalance] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const loadBalance = async () => {
       if (address) {
         try {
-          const bal = await getCUSDBalance(address);
-          setBalance(formatTokenAmount(bal.toString()));
+          const bal = await getCELOBalance(address);
+          // Format the balance from wei to CELO
+          setBalance(formatTokenAmount(bal.toString(), 'CELO'));
         } catch (err) {
           console.error('Error loading balance:', err);
+          setBalance("0 CELO");
         }
       }
     };
     loadBalance();
-  }, [address, getCUSDBalance]);
+  }, [address, getCELOBalance]);
 
   if (!address) {
     return (
@@ -37,14 +39,14 @@ const ProfileView: React.FC = () => {
       <div className="space-y-4">
         <div className="bg-gray-50 p-4 rounded-lg">
           <h3 className="font-medium mb-2">Your Address</h3>
-          <p className="text-gray-600 font-mono text-sm break-all">{address}</p>
+          <p className="text-gray-600 font-mono text-sm break-all">{formatAddress(address)}</p>
         </div>
 
         <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="font-medium mb-2">Balance</h3>
+          <h3 className="font-medium mb-2">CELO Balance</h3>
           <p className="text-gray-600">
             {balance ? (
-              balance
+              <span className="font-mono">{balance}</span>
             ) : (
               <span className="text-gray-400">Loading...</span>
             )}
@@ -73,12 +75,12 @@ const ProfileView: React.FC = () => {
           <h3 className="font-medium mb-2">Quick Actions</h3>
           <div className="space-y-2">
             <a 
-              href="https://celo.org/developers/faucet" 
+              href="https://faucet.celo.org/alfajores" 
               target="_blank" 
               rel="noopener noreferrer"
               className="block text-primary hover:underline"
             >
-              Get test cUSD from faucet →
+              Get test CELO from faucet →
             </a>
             <a 
               href="https://docs.celo.org/wallet" 

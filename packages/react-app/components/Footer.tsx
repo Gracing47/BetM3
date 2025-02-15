@@ -18,12 +18,12 @@ const Footer: React.FC = () => {
               Celo Docs
             </a>
             <a
-              href="https://faucet.celo.org/"
+              href="https://faucet.celo.org/alfajores"
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-gray-500 hover:text-primary"
             >
-              Get Test Tokens
+              Get Test CELO
             </a>
           </div>
         </div>

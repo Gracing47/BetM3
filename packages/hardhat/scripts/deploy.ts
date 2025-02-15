@@ -1,12 +1,15 @@
 import { ethers } from "hardhat";
+import { run } from "hardhat";
+import * as fs from 'fs';
+import { BetM3Token, SimpleBetManager } from "../typechain-types";
 
 async function main() {
   try {
     // Check network connection and account balance
     const [deployer] = await ethers.getSigners();
-    console.log("Deploying contracts with account:", deployer.address);
+    console.log("Deploying contracts with account:", await deployer.getAddress());
 
-    const balance = await ethers.provider.getBalance(deployer.address);
+    const balance = await ethers.provider.getBalance(await deployer.getAddress());
     console.log("Account balance:", ethers.formatEther(balance), "CELO");
 
     if (balance === BigInt(0)) {
@@ -15,35 +18,49 @@ async function main() {
 
     console.log("Starting deployment...");
     
-    // Get the contract factory
-    console.log("Getting contract factory...");
-    const SimpleBetManager = await ethers.getContractFactory("SimpleBetManager");
+    // Deploy BetM3Token first
+    const BetM3TokenFactory = await ethers.getContractFactory("BetM3Token");
+    const betM3Token = await BetM3TokenFactory.deploy();
+    const betM3TokenAddress = await betM3Token.getAddress();
+    console.log("BetM3Token deployed to:", betM3TokenAddress);
 
-    // For testing, we'll use cUSD as the staking token
-    const CUSD_ADDRESS = "0x765DE816845861e75A25fCA122bb6898B8B1282a"; // Celo Alfajores cUSD
-    console.log("Using cUSD address:", CUSD_ADDRESS);
-    
-    // Deploy SimpleBetManager with cUSD as staking token
-    console.log("\nDeploying SimpleBetManager...");
-    const simpleBetManager = await SimpleBetManager.deploy(CUSD_ADDRESS);
-    console.log("Waiting for SimpleBetManager deployment...");
-    await simpleBetManager.waitForDeployment();
+    // Deploy SimpleBetManager with CELO and BetM3Token addresses
+    const CELO_ADDRESS = "0xF194afDf50B03e69Bd7D057c1Aa9e10c9954E4C9"; // Alfajores CELO
+    const SimpleBetManagerFactory = await ethers.getContractFactory("SimpleBetManager");
+    const simpleBetManager = await SimpleBetManagerFactory.deploy(
+      CELO_ADDRESS,
+      betM3TokenAddress
+    );
     const simpleBetManagerAddress = await simpleBetManager.getAddress();
     console.log("SimpleBetManager deployed to:", simpleBetManagerAddress);
+
+    // Verify contracts on Celoscan (optional)
+    if (process.env.CELOSCAN_API_KEY) {
+      await run("verify:verify", {
+        address: betM3TokenAddress,
+        constructorArguments: [],
+      });
+
+      await run("verify:verify", {
+        address: simpleBetManagerAddress,
+        constructorArguments: [CELO_ADDRESS, betM3TokenAddress],
+      });
+    }
 
     console.log("\nDeployment complete!");
     console.log({
       simpleBetManager: simpleBetManagerAddress,
-      stakingToken: CUSD_ADDRESS
+      stakingToken: CELO_ADDRESS,
+      betM3Token: betM3TokenAddress
     });
 
     // Save deployment addresses to a file
-    const fs = require('fs');
     const deploymentInfo = {
       network: "alfajores",
       addresses: {
         simpleBetManager: simpleBetManagerAddress,
-        stakingToken: CUSD_ADDRESS
+        stakingToken: CELO_ADDRESS,
+        betM3Token: betM3TokenAddress
       }
     };
     fs.writeFileSync(
@@ -64,9 +81,7 @@ async function main() {
   }
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

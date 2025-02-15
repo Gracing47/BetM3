@@ -3,7 +3,7 @@ import { useWeb3 } from '../contexts/useWeb3';
 import { formatAddress } from '../utils/format';
 
 const Header: React.FC = () => {
-  const { address, getUserAddress } = useWeb3();
+  const { address, getUserAddress, disconnect, isConnecting } = useWeb3();
 
   const handleConnect = async () => {
     try {
@@ -30,13 +30,20 @@ const Header: React.FC = () => {
                 <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
                   {formatAddress(address)}
                 </span>
+                <button
+                  onClick={disconnect}
+                  className="text-sm text-red-600 hover:text-red-800"
+                >
+                  Disconnect
+                </button>
               </div>
             ) : (
               <button
                 onClick={handleConnect}
-                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+                disabled={isConnecting}
+                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                Connect Wallet
+                {isConnecting ? 'Connecting...' : 'Connect Wallet'}
               </button>
             )}
           </div>
