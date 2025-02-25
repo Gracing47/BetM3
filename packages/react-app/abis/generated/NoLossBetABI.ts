@@ -245,29 +245,16 @@ export const NoLossBetABI = [
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "DISPUTE_PERIOD",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "betId",
+        "name": "_betId",
         "type": "uint256"
       }
     ],
     "name": "acceptBet",
     "outputs": [],
-    "stateMutability": "payable",
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -309,6 +296,38 @@ export const NoLossBetABI = [
   },
   {
     "inputs": [],
+    "name": "betCounter",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "betLiquidity",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "betM3Token",
     "outputs": [
       {
@@ -323,25 +342,122 @@ export const NoLossBetABI = [
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "bets",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "opponent",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "creatorStake",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "opponentStake",
+        "type": "uint256"
+      },
+      {
         "internalType": "string",
         "name": "condition",
         "type": "string"
       },
+      {
+        "internalType": "bool",
+        "name": "creatorOutcome",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "opponentOutcome",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "resolved",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiration",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "celoToken",
+    "outputs": [
+      {
+        "internalType": "contract IERC20",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_opponentStake",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "_condition",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_tokenURI",
+        "type": "string"
+      }
+    ],
+    "name": "createBet",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
       }
     ],
-    "name": "createBet",
-    "outputs": [
+    "name": "fundCommunityPool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "amount",
         "type": "uint256"
       }
     ],
-    "stateMutability": "payable",
+    "name": "fundStableTokenPool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -358,97 +474,6 @@ export const NoLossBetABI = [
         "internalType": "address",
         "name": "",
         "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "betId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getBet",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "creator",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "opponent",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "amount",
-            "type": "uint256"
-          },
-          {
-            "internalType": "string",
-            "name": "condition",
-            "type": "string"
-          },
-          {
-            "internalType": "uint256",
-            "name": "expiration",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bool",
-            "name": "isAccepted",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "isResolved",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "creatorOutcome",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "opponentOutcome",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "creatorSubmitted",
-            "type": "bool"
-          },
-          {
-            "internalType": "bool",
-            "name": "opponentSubmitted",
-            "type": "bool"
-          },
-          {
-            "internalType": "uint256",
-            "name": "disputeDeadline",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "totalYield",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "lpTokenAmount",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct NoLossBet.Bet",
-        "name": "",
-        "type": "tuple"
       }
     ],
     "stateMutability": "view",
@@ -506,19 +531,6 @@ export const NoLossBetABI = [
   },
   {
     "inputs": [],
-    "name": "nextBetId",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "owner",
     "outputs": [
       {
@@ -560,7 +572,7 @@ export const NoLossBetABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "betId",
+        "name": "_betId",
         "type": "uint256"
       }
     ],
@@ -573,13 +585,13 @@ export const NoLossBetABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "betId",
+        "name": "_betId",
         "type": "uint256"
       },
       {
-        "internalType": "address",
-        "name": "winner",
-        "type": "address"
+        "internalType": "bool",
+        "name": "_creatorWins",
+        "type": "bool"
       }
     ],
     "name": "resolveDispute",
@@ -657,15 +669,28 @@ export const NoLossBetABI = [
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "stableToken",
+    "outputs": [
+      {
+        "internalType": "contract IERC20",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "betId",
+        "name": "_betId",
         "type": "uint256"
       },
       {
         "internalType": "bool",
-        "name": "outcome",
+        "name": "_success",
         "type": "bool"
       }
     ],
@@ -728,6 +753,25 @@ export const NoLossBetABI = [
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "tokenURIs",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "from",
         "type": "address"
@@ -766,7 +810,7 @@ export const NoLossBetABI = [
     "name": "uniswapRouter",
     "outputs": [
       {
-        "internalType": "contract IUniswapRouter",
+        "internalType": "contract IUniswapV2Router",
         "name": "",
         "type": "address"
       }
@@ -774,4 +818,4 @@ export const NoLossBetABI = [
     "stateMutability": "view",
     "type": "function"
   }
-]; 
+];

@@ -96,4 +96,53 @@ describe("MockCELO", function () {
       expect(errorMessage).to.include("Insufficient balance for staking");
     });
   });
+
+  describe("Mint and Balance Functionality", function () {
+    it("Should correctly mint tokens and update balances", async function () {
+      // Create a new test address
+      const [_, __, ___, ____, testUser] = await ethers.getSigners();
+      
+      // Check initial balance (should be 0)
+      const initialBalance = await celoToken.balanceOf(testUser.address);
+      console.log(`Initial balance: ${ethers.formatEther(initialBalance)} CELO`);
+      
+      // Mint tokens to the test user
+      const mintAmount = ethers.parseEther("500");
+      await celoToken.mint(testUser.address, mintAmount);
+      console.log(`Minted ${ethers.formatEther(mintAmount)} CELO to ${testUser.address}`);
+      
+      // Check updated balance
+      const newBalance = await celoToken.balanceOf(testUser.address);
+      console.log(`New balance: ${ethers.formatEther(newBalance)} CELO`);
+      
+      // Verify the balance increased by the mint amount
+      expect(newBalance).to.equal(initialBalance + mintAmount);
+      
+      // Mint more tokens
+      const additionalAmount = ethers.parseEther("250");
+      await celoToken.mint(testUser.address, additionalAmount);
+      console.log(`Minted additional ${ethers.formatEther(additionalAmount)} CELO`);
+      
+      // Check final balance
+      const finalBalance = await celoToken.balanceOf(testUser.address);
+      console.log(`Final balance: ${ethers.formatEther(finalBalance)} CELO`);
+      
+      // Verify the final balance is correct
+      expect(finalBalance).to.equal(initialBalance + mintAmount + additionalAmount);
+    });
+    
+    it("Should allow only the owner to mint tokens", async function () {
+      // Try to mint tokens from a non-owner account
+      const nonOwnerMintAmount = ethers.parseEther("100");
+      
+      let errorOccurred = false;
+      try {
+        await celoToken.connect(user1).mint(user2.address, nonOwnerMintAmount);
+      } catch (error) {
+        errorOccurred = true;
+      }
+      
+      expect(errorOccurred).to.be.true;
+    });
+  });
 }); 

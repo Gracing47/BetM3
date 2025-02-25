@@ -9,6 +9,7 @@ interface BetDisplayProps {
     creator: string;
     opponent: string;
     amount: string;
+    opponentStake: string;
     condition: string;
     creatorOutcome: boolean | null;
     opponentOutcome: boolean | null;
@@ -113,8 +114,21 @@ const BetDisplay: React.FC<BetDisplayProps> = ({ bet, onJoin, onBetUpdated }) =>
 
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div>
-          <p className="text-gray-500">Stake Amount</p>
-          <p className="font-medium">{formatTokenAmount(bet.amount)}</p>
+          <p className="text-gray-500">Creator Stake</p>
+          <p className="font-medium">{formatTokenAmount(bet.amount)} <span className="text-xs text-gray-500">(Fixed for MVP)</span></p>
+        </div>
+        <div>
+          <p className="text-gray-500">Opponent Stake</p>
+          <p className="font-medium">
+            {bet.opponent && bet.opponent !== ethers.ZeroAddress 
+              ? formatTokenAmount(bet.opponentStake)
+              : formatTokenAmount(bet.opponentStake || bet.amount)}
+            {parseFloat(bet.opponentStake) < 10 && <span className="text-xs text-amber-500 ml-1">(Min: 10 CELO)</span>}
+          </p>
+        </div>
+        <div>
+          <p className="text-gray-500">Creator</p>
+          <p className="font-medium">{formatAddress(bet.creator)}</p>
         </div>
         <div>
           <p className="text-gray-500">Opponent</p>

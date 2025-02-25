@@ -6,13 +6,14 @@ import { ethers } from 'ethers';
 import { NoLossBetABI } from "../abis/generated";
 
 // Füge die Contract-Adresse hinzu
-const NO_LOSS_BET_ADDRESS = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
+const NO_LOSS_BET_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9";
 
 interface Bet {
   id: string;
   creator: string;
   opponent: string;
   amount: string;
+  opponentStake: string;
   condition: string;
   creatorOutcome: boolean | null;
   opponentOutcome: boolean | null;
@@ -70,7 +71,8 @@ export const ActiveBets = () => {
             const betId = event.args[0]; // First argument is betId
             console.log("Processing bet ID:", betId.toString());
 
-            const betDetails = await noLossBet.getBet(betId);
+            // Use the bets mapping instead of getBet function
+            const betDetails = await noLossBet.bets(betId);
             console.log("Got details for bet", betId.toString(), ":", betDetails);
 
             // Skip if bet doesn't exist
@@ -87,7 +89,7 @@ export const ActiveBets = () => {
             if (betDetails.resolved) {
               status = 'Completed';
             }
-            if (betDetails.expirationTime < Math.floor(Date.now() / 1000)) {
+            if (betDetails.expiration < Math.floor(Date.now() / 1000)) {
               status = 'Cancelled';
             }
 
@@ -95,12 +97,13 @@ export const ActiveBets = () => {
               id: betId.toString(),
               creator: betDetails.creator,
               opponent: betDetails.opponent,
-              amount: betDetails.amount.toString(),
+              amount: betDetails.creatorStake.toString(),
+              opponentStake: betDetails.opponentStake.toString(),
               condition: betDetails.condition,
               creatorOutcome: betDetails.creatorOutcome,
               opponentOutcome: betDetails.opponentOutcome,
               resolved: betDetails.resolved,
-              expirationTime: Number(betDetails.expirationTime),
+              expirationTime: Number(betDetails.expiration),
               status
             };
           } catch (err) {
@@ -133,12 +136,19 @@ export const ActiveBets = () => {
       return;
     }
 
+    // Check if opponent stake is at least 10 CELO
+    const opponentStake = parseFloat(bet.opponentStake || bet.amount);
+    if (opponentStake < 10) {
+      setError("Minimum stake to join a bet is 10 CELO");
+      return;
+    }
+
     setLoading(prev => ({ ...prev, [bet.id]: true }));
     setError(null);
 
     try {
       // First approve token spending
-      const approveTx = await approveToken(bet.amount);
+      const approveTx = await approveToken(bet.opponentStake || bet.amount);
       await approveTx.wait();
 
       // Then join the bet

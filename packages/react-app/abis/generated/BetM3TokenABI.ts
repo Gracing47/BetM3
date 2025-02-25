@@ -344,4 +344,4 @@ export const BetM3TokenABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   }
-]; 
+];

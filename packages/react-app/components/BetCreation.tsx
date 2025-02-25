@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useWeb3 } from '../contexts/useWeb3';
 
 interface FormData {
-  stakeAmount: string;
+  opponentStake: string;
   condition: string;
   duration: string;
 }
@@ -14,7 +14,7 @@ interface BetCreationProps {
 export const BetCreation: React.FC<BetCreationProps> = ({ onBetCreated }) => {
   const { createBet } = useWeb3();
   const [formData, setFormData] = useState<FormData>({
-    stakeAmount: '',
+    opponentStake: '',
     condition: '',
     duration: '14'
   });
@@ -33,8 +33,14 @@ export const BetCreation: React.FC<BetCreationProps> = ({ onBetCreated }) => {
     setError(null);
 
     // Validate form
-    if (!formData.stakeAmount || !formData.condition || !formData.duration) {
+    if (!formData.opponentStake || !formData.condition || !formData.duration) {
       setError('Please fill in all fields');
+      return;
+    }
+
+    // Validate minimum opponent stake
+    if (parseFloat(formData.opponentStake) < 10) {
+      setError('Opponent stake must be at least 10 CELO');
       return;
     }
 
@@ -48,12 +54,13 @@ export const BetCreation: React.FC<BetCreationProps> = ({ onBetCreated }) => {
     setShowConfirmation(false);
 
     try {
-      const tx = await createBet(formData.stakeAmount, formData.condition, formData.duration);
+      // Pass the opponent stake to the createBet function
+      const tx = await createBet(formData.opponentStake, formData.condition, formData.duration);
       await tx.wait();
       
       // Reset form and show success message
       setFormData({
-        stakeAmount: '',
+        opponentStake: '',
         condition: '',
         duration: '14'
       });
@@ -92,25 +99,31 @@ export const BetCreation: React.FC<BetCreationProps> = ({ onBetCreated }) => {
         </div>
       )}
       
+      <div className="bg-blue-50 p-4 rounded-md mb-6">
+        <p className="text-blue-800">
+          <strong>MVP Note:</strong> For this version, creating a bet requires a fixed stake of 100 CELO tokens. In future versions, you'll be able to set your own stake amount (minimum 10 CELO).
+        </p>
+      </div>
+      
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label htmlFor="stakeAmount" className="block text-gray-700 font-medium mb-2">
-            Stake Amount (CELO)
+          <label htmlFor="opponentStake" className="block text-gray-700 font-medium mb-2">
+            Opponent Stake Amount (CELO)
           </label>
           <input
             type="number"
-            id="stakeAmount"
-            name="stakeAmount"
-            value={formData.stakeAmount}
+            id="opponentStake"
+            name="opponentStake"
+            value={formData.opponentStake}
             onChange={handleChange}
-            placeholder="0.1"
-            min="0.01"
-            step="0.01"
+            placeholder="10"
+            min="10"
+            step="0.1"
             className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
             disabled={isLoading}
           />
           <p className="text-sm text-gray-500 mt-1">
-            This amount will be deposited into a Uniswap liquidity pool to generate yield.
+            This is the amount your opponent will need to stake to join your bet (minimum 10 CELO).
           </p>
         </div>
         
@@ -174,7 +187,10 @@ export const BetCreation: React.FC<BetCreationProps> = ({ onBetCreated }) => {
             </p>
             <div className="bg-gray-50 p-4 rounded-md mb-4">
               <div className="mb-2">
-                <span className="font-medium">Stake Amount:</span> {formData.stakeAmount} CELO
+                <span className="font-medium">Your Stake:</span> 100 CELO (fixed for MVP)
+              </div>
+              <div className="mb-2">
+                <span className="font-medium">Opponent Stake:</span> {formData.opponentStake} CELO
               </div>
               <div className="mb-2">
                 <span className="font-medium">Duration:</span> {formData.duration} days

@@ -3,10 +3,11 @@ import { useWeb3 } from '../contexts/useWeb3';
 import { BetCreation } from '../components/BetCreation';
 import { ActiveBets } from '../components/ActiveBets';
 import YieldDisplay from '../components/YieldDisplay';
+import CELOMinter from '../components/CELOMinter';
 
 export default function Home() {
   const { address, getUserAddress, disconnect, isConnecting, networkName, switchToCelo } = useWeb3();
-  const [activeTab, setActiveTab] = useState<'create' | 'active' | 'yield'>('create');
+  const [activeTab, setActiveTab] = useState<'create' | 'active' | 'yield' | 'mint'>('create');
   const [isWrongNetwork, setIsWrongNetwork] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -156,6 +157,16 @@ export default function Home() {
               >
                 Yield Info
               </button>
+              <button
+                onClick={() => setActiveTab('mint')}
+                className={`px-4 py-2 font-medium ${
+                  activeTab === 'mint'
+                    ? 'text-primary border-b-2 border-primary'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Get Test CELO
+              </button>
             </div>
 
             {/* Tab Content */}
@@ -163,6 +174,7 @@ export default function Home() {
               {activeTab === 'create' && <BetCreation onBetCreated={handleRefresh} />}
               {activeTab === 'active' && <ActiveBets key={refreshTrigger} />}
               {activeTab === 'yield' && <YieldDisplay />}
+              {activeTab === 'mint' && <CELOMinter />}
             </div>
 
             {/* Platform Info */}
