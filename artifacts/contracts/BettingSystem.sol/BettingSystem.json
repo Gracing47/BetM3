@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "BettingSystem",
+  "sourceName": "contracts/BettingSystem.sol",
+  "abi": [],
+  "bytecode": "0x6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfea264697066735822122007c344161da49df9033ffe3efcd7ed9fd9c24a8da5007e9349f454fa67cad60064736f6c63430008130033",
+  "deployedBytecode": "0x6080604052600080fdfea264697066735822122007c344161da49df9033ffe3efcd7ed9fd9c24a8da5007e9349f454fa67cad60064736f6c63430008130033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

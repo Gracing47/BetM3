@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 import { run } from "hardhat";
 import * as fs from 'fs';
-import { BetM3Token, SimpleBetManager } from "../typechain-types";
+import { BetM3Token, NoLossBet, AavePoolMock } from "../typechain-types";
 
 async function main() {
   try {
@@ -24,15 +24,22 @@ async function main() {
     const betM3TokenAddress = await betM3Token.getAddress();
     console.log("BetM3Token deployed to:", betM3TokenAddress);
 
-    // Deploy SimpleBetManager with CELO and BetM3Token addresses
+    // Deploy AavePoolMock with CELO address
     const CELO_ADDRESS = "0xF194afDf50B03e69Bd7D057c1Aa9e10c9954E4C9"; // Alfajores CELO
-    const SimpleBetManagerFactory = await ethers.getContractFactory("SimpleBetManager");
-    const simpleBetManager = await SimpleBetManagerFactory.deploy(
+    const AavePoolMockFactory = await ethers.getContractFactory("AavePoolMock");
+    const aavePoolMock = await AavePoolMockFactory.deploy(CELO_ADDRESS);
+    const aavePoolMockAddress = await aavePoolMock.getAddress();
+    console.log("AavePoolMock deployed to:", aavePoolMockAddress);
+
+    // Deploy NoLossBet with CELO, BetM3Token, and AavePoolMock addresses
+    const NoLossBetFactory = await ethers.getContractFactory("NoLossBet");
+    const noLossBet = await NoLossBetFactory.deploy(
       CELO_ADDRESS,
-      betM3TokenAddress
+      betM3TokenAddress,
+      aavePoolMockAddress
     );
-    const simpleBetManagerAddress = await simpleBetManager.getAddress();
-    console.log("SimpleBetManager deployed to:", simpleBetManagerAddress);
+    const noLossBetAddress = await noLossBet.getAddress();
+    console.log("NoLossBet deployed to:", noLossBetAddress);
 
     // Verify contracts on Celoscan (optional)
     if (process.env.CELOSCAN_API_KEY) {
@@ -42,14 +49,20 @@ async function main() {
       });
 
       await run("verify:verify", {
-        address: simpleBetManagerAddress,
-        constructorArguments: [CELO_ADDRESS, betM3TokenAddress],
+        address: aavePoolMockAddress,
+        constructorArguments: [CELO_ADDRESS],
+      });
+
+      await run("verify:verify", {
+        address: noLossBetAddress,
+        constructorArguments: [CELO_ADDRESS, betM3TokenAddress, aavePoolMockAddress],
       });
     }
 
     console.log("\nDeployment complete!");
     console.log({
-      simpleBetManager: simpleBetManagerAddress,
+      noLossBet: noLossBetAddress,
+      aavePoolMock: aavePoolMockAddress,
       stakingToken: CELO_ADDRESS,
       betM3Token: betM3TokenAddress
     });
@@ -58,7 +71,8 @@ async function main() {
     const deploymentInfo = {
       network: "alfajores",
       addresses: {
-        simpleBetManager: simpleBetManagerAddress,
+        noLossBet: noLossBetAddress,
+        aavePoolMock: aavePoolMockAddress,
         stakingToken: CELO_ADDRESS,
         betM3Token: betM3TokenAddress
       }
