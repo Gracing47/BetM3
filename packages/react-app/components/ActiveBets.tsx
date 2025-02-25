@@ -1,63 +1,63 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useWeb3 } from "../contexts/useWeb3";
 import BetDisplay from "./BetDisplay";
 import { formatTokenAmount } from "../utils/format";
 import { ethers } from 'ethers';
-import { SimpleBetManagerABI } from "../abis/SimpleBetManagerABI";
+import { NoLossBetABI } from "../abis/generated";
 
 // Füge die Contract-Adresse hinzu
-const SIMPLE_BET_MANAGER_ADDRESS = "0x910273a1E3396e728CDe8B0748Fe1C0A36501BDA";
+const NO_LOSS_BET_ADDRESS = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
 
 interface Bet {
   id: string;
   creator: string;
-  stakeAmount: string;
-  totalStaked: string;
-  startTime: number;
-  endTime: number;
-  status: string;
+  opponent: string;
+  amount: string;
   condition: string;
-  participants: string[];
+  creatorOutcome: boolean | null;
+  opponentOutcome: boolean | null;
+  resolved: boolean;
+  expirationTime: number;
+  status: 'Created' | 'Active' | 'Completed' | 'Cancelled';
 }
 
 interface BetEvent {
   betId: string;
   creator: string;
-  stakeAmount: string;
-  endTime: number;
+  amount: string;
   condition: string;
 }
 
-const statusToString = (status: string): 'Created' | 'Active' | 'Completed' | 'Cancelled' => {
-  const statuses = ['Created', 'Active', 'Completed', 'Cancelled'];
-  return statuses[Number(status)] as 'Created' | 'Active' | 'Completed' | 'Cancelled';
-};
-
 export const ActiveBets = () => {
-  const { getBetDetails, addStake, approveToken, claimStake, address, getBetParticipants } = useWeb3();
+  const { acceptBet, getBet, address, approveToken } = useWeb3();
   const [bets, setBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState<{ [key: string]: boolean }>({});
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'created' | 'active' | 'completed'>('all');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const refreshBets = useCallback(() => {
+    setRefreshTrigger(prev => prev + 1);
+  }, []);
 
   useEffect(() => {
     const loadBetsFromEvents = async () => {
       try {
-        const provider = new ethers.JsonRpcProvider('https://alfajores-forno.celo-testnet.org');
-        const betManager = new ethers.Contract(
-          SIMPLE_BET_MANAGER_ADDRESS,
-          SimpleBetManagerABI.abi,
+        const provider = new ethers.JsonRpcProvider('http://localhost:8545');
+        const noLossBet = new ethers.Contract(
+          NO_LOSS_BET_ADDRESS,
+          NoLossBetABI,
           provider
         );
 
         // Get block number for filtering
         const currentBlock = await provider.getBlockNumber();
-        const fromBlock = Math.max(0, currentBlock - 100000); // Increase block range
+        const fromBlock = Math.max(0, currentBlock - 10000); // Reduziere den Block-Bereich für lokale Tests
         console.log("Searching for events from block", fromBlock, "to", currentBlock);
 
         // Get past BetCreated events
-        const filter = betManager.filters.BetCreated();
-        const events = await betManager.queryFilter(filter, fromBlock, currentBlock);
+        const filter = noLossBet.filters.BetCreated();
+        const events = await noLossBet.queryFilter(filter, fromBlock, currentBlock);
         console.log("Found events:", events);
 
         if (events.length === 0) {
@@ -70,37 +70,38 @@ export const ActiveBets = () => {
             const betId = event.args[0]; // First argument is betId
             console.log("Processing bet ID:", betId.toString());
 
-            const details = await betManager.getBetDetails(betId);
-            console.log("Got details for bet", betId.toString(), ":", details);
+            const betDetails = await noLossBet.getBet(betId);
+            console.log("Got details for bet", betId.toString(), ":", betDetails);
 
             // Skip if bet doesn't exist
-            if (!details || !details.creator) {
+            if (!betDetails || !betDetails.creator) {
               console.log("No valid details found for bet:", betId.toString());
               return null;
             }
 
-            let participants: string[] = [];
-            try {
-              participants = await betManager.getBetParticipants(betId);
-              console.log("Got participants for bet", betId.toString(), ":", participants);
-            } catch (err) {
-              console.warn("Could not get participants for bet", betId.toString(), err);
+            // Determine status based on bet details
+            let status: 'Created' | 'Active' | 'Completed' | 'Cancelled' = 'Created';
+            if (betDetails.opponent !== ethers.ZeroAddress) {
+              status = 'Active';
             }
-
-            // Convert status number to string
-            const statusIndex = Number(details.status || 0);
-            const status = ['Created', 'Active', 'Completed', 'Cancelled'][statusIndex];
+            if (betDetails.resolved) {
+              status = 'Completed';
+            }
+            if (betDetails.expirationTime < Math.floor(Date.now() / 1000)) {
+              status = 'Cancelled';
+            }
 
             return {
               id: betId.toString(),
-              creator: details.creator,
-              stakeAmount: details.stakeAmount.toString(),
-              totalStaked: details.totalStaked.toString(),
-              startTime: Number(details.startTime),
-              endTime: Number(details.endTime),
-              status,
-              condition: details.condition,
-              participants,
+              creator: betDetails.creator,
+              opponent: betDetails.opponent,
+              amount: betDetails.amount.toString(),
+              condition: betDetails.condition,
+              creatorOutcome: betDetails.creatorOutcome,
+              opponentOutcome: betDetails.opponentOutcome,
+              resolved: betDetails.resolved,
+              expirationTime: Number(betDetails.expirationTime),
+              status
             };
           } catch (err) {
             console.error("Error processing bet:", event, err);
@@ -113,7 +114,7 @@ export const ActiveBets = () => {
         console.log("Valid bets loaded:", validBets);
 
         // Sort bets by creation time (newest first)
-        const sortedBets = validBets.sort((a, b) => b.startTime - a.startTime);
+        const sortedBets = validBets.sort((a, b) => b.expirationTime - a.expirationTime);
         setBets(sortedBets);
       } catch (err) {
         console.error("Error loading bets from events:", err);
@@ -124,7 +125,7 @@ export const ActiveBets = () => {
     if (address) {
       loadBetsFromEvents();
     }
-  }, [address]);
+  }, [address, refreshTrigger]);
 
   const handleJoinBet = async (bet: Bet) => {
     if (!address) {
@@ -137,27 +138,15 @@ export const ActiveBets = () => {
 
     try {
       // First approve token spending
-      const approveTx = await approveToken(bet.stakeAmount);
+      const approveTx = await approveToken(bet.amount);
       await approveTx.wait();
 
       // Then join the bet
-      const tx = await addStake(bet.id);
+      const tx = await acceptBet(bet.id);
       await tx.wait();
 
-      // Refresh bet details
-      const updatedDetails = await getBetDetails(bet.id);
-      const participants = await getBetParticipants(bet.id);
-      
-      setBets(prev => prev.map(b => 
-        b.id === bet.id 
-          ? {
-              ...b,
-              totalStaked: updatedDetails[2],
-              status: updatedDetails[6],
-              participants
-            }
-          : b
-      ));
+      // Refresh all bets
+      refreshBets();
     } catch (err) {
       console.error("Error joining bet:", err);
       setError("Failed to join bet. Please try again.");
@@ -166,36 +155,10 @@ export const ActiveBets = () => {
     }
   };
 
-  const handleClaimStake = async (bet: Bet) => {
-    if (!address) {
-      setError("Please connect your wallet first");
-      return;
-    }
-
-    setLoading(prev => ({ ...prev, [bet.id]: true }));
-    setError(null);
-
-    try {
-      const tx = await claimStake(bet.id);
-      await tx.wait();
-
-      // Refresh bet details
-      const updatedDetails = await getBetDetails(bet.id);
-      setBets(prev => prev.map(b => 
-        b.id === bet.id 
-          ? {
-              ...b,
-              status: updatedDetails[6]
-            }
-          : b
-      ));
-    } catch (err) {
-      console.error("Error claiming stake:", err);
-      setError("Failed to claim stake. Please try again.");
-    } finally {
-      setLoading(prev => ({ ...prev, [bet.id]: false }));
-    }
-  };
+  // Handler for when a bet is updated (outcome submitted or resolved)
+  const handleBetUpdated = useCallback(() => {
+    refreshBets();
+  }, [refreshBets]);
 
   // Filter bets based on status
   const filteredBets = bets.filter(bet => {
@@ -240,6 +203,7 @@ export const ActiveBets = () => {
             key={bet.id}
             bet={bet}
             onJoin={() => handleJoinBet(bet)}
+            onBetUpdated={handleBetUpdated}
           />
         ))}
 
@@ -249,7 +213,7 @@ export const ActiveBets = () => {
             <p className="text-gray-500 text-sm">
               {filter === 'all' 
                 ? 'Create a new bet to get started!'
-                : `No ${filter} bets at the moment.`}
+                : `No ${filter} bets found. Try a different filter.`}
             </p>
           </div>
         )}

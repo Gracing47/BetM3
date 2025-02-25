@@ -21,23 +21,46 @@ async function main() {
     const betM3TokenAddress = await betM3Token.getAddress();
     console.log("BetM3Token deployed to:", betM3TokenAddress);
 
-    // Deploy AavePoolMock with mock CELO address
-    console.log("Deploying AavePoolMock...");
     // For localhost, we'll use a mock address for CELO
     const CELO_ADDRESS = "0xF194afDf50B03e69Bd7D057c1Aa9e10c9954E4C9"; 
-    const AavePoolMockFactory = await ethers.getContractFactory("packages/hardhat/contracts/AavePoolMock.sol:AavePoolMock");
-    const aavePoolMock = await AavePoolMockFactory.deploy(CELO_ADDRESS);
-    await aavePoolMock.waitForDeployment();
-    const aavePoolMockAddress = await aavePoolMock.getAddress();
-    console.log("AavePoolMock deployed to:", aavePoolMockAddress);
+    
+    // Deploy cUSDToken
+    console.log("Deploying cUSDToken...");
+    const cUSDTokenFactory = await ethers.getContractFactory("packages/hardhat/contracts/cUSDToken.sol:cUSDToken");
+    const cUSDToken = await cUSDTokenFactory.deploy();
+    await cUSDToken.waitForDeployment();
+    const cUSDTokenAddress = await cUSDToken.getAddress();
+    console.log("cUSDToken deployed to:", cUSDTokenAddress);
+    
+    // Deploy LPToken
+    console.log("Deploying LPToken...");
+    const LPTokenFactory = await ethers.getContractFactory("packages/hardhat/contracts/LPToken.sol:LPToken");
+    const lpToken = await LPTokenFactory.deploy();
+    await lpToken.waitForDeployment();
+    const lpTokenAddress = await lpToken.getAddress();
+    console.log("LPToken deployed to:", lpTokenAddress);
 
-    // Deploy NoLossBet with CELO, BetM3Token, and AavePoolMock addresses
+    // Deploy UniswapPoolMock
+    console.log("Deploying UniswapPoolMock...");
+    const UniswapPoolMockFactory = await ethers.getContractFactory("packages/hardhat/contracts/UniswapPoolMock.sol:UniswapPoolMock");
+    const uniswapPoolMock = await UniswapPoolMockFactory.deploy(
+      CELO_ADDRESS,
+      cUSDTokenAddress,
+      lpTokenAddress
+    );
+    await uniswapPoolMock.waitForDeployment();
+    const uniswapPoolMockAddress = await uniswapPoolMock.getAddress();
+    console.log("UniswapPoolMock deployed to:", uniswapPoolMockAddress);
+
+    // Deploy NoLossBet with CELO, cUSD, BetM3Token, LPToken, and UniswapPoolMock addresses
     console.log("Deploying NoLossBet...");
     const NoLossBetFactory = await ethers.getContractFactory("packages/hardhat/contracts/NoLossBet.sol:NoLossBet");
     const noLossBet = await NoLossBetFactory.deploy(
       CELO_ADDRESS,
+      cUSDTokenAddress,
       betM3TokenAddress,
-      aavePoolMockAddress
+      lpTokenAddress,
+      uniswapPoolMockAddress
     );
     await noLossBet.waitForDeployment();
     const noLossBetAddress = await noLossBet.getAddress();
@@ -46,8 +69,10 @@ async function main() {
     console.log("\nDeployment complete!");
     console.log({
       noLossBet: noLossBetAddress,
-      aavePoolMock: aavePoolMockAddress,
-      stakingToken: CELO_ADDRESS,
+      uniswapPoolMock: uniswapPoolMockAddress,
+      celoToken: CELO_ADDRESS,
+      cUSDToken: cUSDTokenAddress,
+      lpToken: lpTokenAddress,
       betM3Token: betM3TokenAddress
     });
 
@@ -56,8 +81,10 @@ async function main() {
       network: "localhost",
       addresses: {
         noLossBet: noLossBetAddress,
-        aavePoolMock: aavePoolMockAddress,
-        stakingToken: CELO_ADDRESS,
+        uniswapPoolMock: uniswapPoolMockAddress,
+        celoToken: CELO_ADDRESS,
+        cUSDToken: cUSDTokenAddress,
+        lpToken: lpTokenAddress,
         betM3Token: betM3TokenAddress
       }
     };

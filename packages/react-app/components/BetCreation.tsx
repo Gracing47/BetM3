@@ -1,274 +1,208 @@
 import React, { useState } from 'react';
 import { useWeb3 } from '../contexts/useWeb3';
-import { ethers } from 'ethers';
-import Button from "./Button";
-import { formatTokenAmount, toWei } from "../utils/format";
 
-interface ConfirmationModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  data: {
-    stakeAmount: string;
-    duration: string;
-    condition: string;
-  };
+interface FormData {
+  stakeAmount: string;
+  condition: string;
+  duration: string;
 }
 
-const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  data,
-}) => {
-  if (!isOpen) return null;
+interface BetCreationProps {
+  onBetCreated?: () => void;
+}
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h3 className="text-xl font-bold mb-4">Confirm Bet Creation</h3>
-        
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm text-gray-600">Stake Amount</p>
-            <p className="font-semibold">{`${data.stakeAmount} CELO`}</p>
-          </div>
-          
-          <div>
-            <p className="text-sm text-gray-600">Duration</p>
-            <p className="font-semibold">{data.duration} days</p>
-          </div>
-          
-          <div>
-            <p className="text-sm text-gray-600">Condition</p>
-            <p className="font-semibold">{data.condition}</p>
-          </div>
-        </div>
-
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
-          >
-            Confirm
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export const BetCreation = () => {
-  const { createBet, address, getUserAddress, approveToken } = useWeb3();
-  const [loading, setLoading] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [formData, setFormData] = useState({
-    stakeAmount: "",
-    duration: "",
-    condition: "",
+export const BetCreation: React.FC<BetCreationProps> = ({ onBetCreated }) => {
+  const { createBet } = useWeb3();
+  const [formData, setFormData] = useState<FormData>({
+    stakeAmount: '',
+    condition: '',
+    duration: '14'
   });
-  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    setError("");
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const suggestedAmounts = [0.1, 0.5, 1, 5]; // Smaller amounts for testing
-  const suggestedDurations = [
-    { days: 1, label: "1 Day" },
-    { days: 3, label: "3 Days" },
-    { days: 7, label: "1 Week" },
-    { days: 14, label: "2 Weeks" }
-  ];
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
 
-  const handleSuggestedAmount = (amount: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      stakeAmount: amount.toString(),
-    }));
-    setError("");
-  };
-
-  const handleSuggestedDuration = (days: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      duration: days.toString(),
-    }));
-    setError("");
-  };
-
-  const handleCreateBet = async () => {
-    setError("");
-
-    if (!address) {
-      try {
-        await getUserAddress();
-      } catch (err) {
-        setError("Please connect your wallet first");
-        return;
-      }
-    }
-
-    if (!formData.stakeAmount || !formData.duration || !formData.condition) {
-      setError("Please fill in all fields");
+    // Validate form
+    if (!formData.stakeAmount || !formData.condition || !formData.duration) {
+      setError('Please fill in all fields');
       return;
     }
 
+    // Show confirmation modal
     setShowConfirmation(true);
   };
 
-  const handleConfirmedCreate = async () => {
-    try {
-      setLoading(true);
-      setShowConfirmation(false);
-      
-      // Convert amount to wei before approval
-      const amountInWei = toWei(formData.stakeAmount);
-      
-      // First approve token spending
-      try {
-        const approveTx = await approveToken(amountInWei);
-        await approveTx.wait();
-      } catch (err) {
-        console.error("Error approving tokens:", err);
-        setError("Failed to approve tokens. Please try again.");
-        setLoading(false);
-        return;
-      }
+  const handleCreateBet = async () => {
+    setIsLoading(true);
+    setError(null);
+    setShowConfirmation(false);
 
-      // Then create bet with same wei amount
-      const durationInSeconds = parseInt(formData.duration) * 24 * 60 * 60;
-      const tx = await createBet(amountInWei, durationInSeconds, formData.condition);
+    try {
+      const tx = await createBet(formData.stakeAmount, formData.condition, formData.duration);
       await tx.wait();
       
-      // Reset form
+      // Reset form and show success message
       setFormData({
-        stakeAmount: "",
-        duration: "",
-        condition: "",
+        stakeAmount: '',
+        condition: '',
+        duration: '14'
       });
-    } catch (err) {
-      console.error("Error creating bet:", err);
-      setError("Failed to create bet. Please try again.");
+      setSuccess(true);
+      
+      // Notify parent component to refresh bets list
+      if (onBetCreated) {
+        onBetCreated();
+      }
+      
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setSuccess(false);
+      }, 5000);
+    } catch (err: any) {
+      console.error('Error creating bet:', err);
+      setError(err.message || 'Failed to create bet. Please try again.');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div id="bet-creation" className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold mb-4">Create New Bet</h2>
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">Create a New Bet</h2>
       
-      <div className="space-y-6">
-        {/* Stake Amount Input */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+      {error && (
+        <div className="bg-red-50 text-red-500 p-4 rounded-md mb-4">
+          {error}
+        </div>
+      )}
+      
+      {success && (
+        <div className="bg-green-50 text-green-600 p-4 rounded-md mb-4">
+          Bet created successfully! Your stake has been deposited.
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label htmlFor="stakeAmount" className="block text-gray-700 font-medium mb-2">
             Stake Amount (CELO)
           </label>
           <input
             type="number"
+            id="stakeAmount"
             name="stakeAmount"
             value={formData.stakeAmount}
-            onChange={handleInputChange}
-            className="w-full p-2 border rounded-md mb-2"
-            placeholder="10"
+            onChange={handleChange}
+            placeholder="0.1"
+            min="0.01"
+            step="0.01"
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+            disabled={isLoading}
           />
-          <div className="flex gap-2 flex-wrap">
-            {suggestedAmounts.map((amount) => (
-              <button
-                key={amount}
-                onClick={() => handleSuggestedAmount(amount)}
-                className="px-3 py-1 text-sm bg-gray-100 rounded-full hover:bg-gray-200"
-              >
-                {amount} CELO
-              </button>
-            ))}
-          </div>
+          <p className="text-sm text-gray-500 mt-1">
+            This amount will be deposited into a Uniswap liquidity pool to generate yield.
+          </p>
         </div>
-
-        {/* Duration Input */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Duration
+        
+        <div className="mb-4">
+          <label htmlFor="duration" className="block text-gray-700 font-medium mb-2">
+            Bet Duration
           </label>
-          <input
-            type="number"
+          <select
+            id="duration"
             name="duration"
             value={formData.duration}
-            onChange={handleInputChange}
-            className="w-full p-2 border rounded-md mb-2"
-            placeholder="Enter duration in days"
-          />
-          <div className="flex gap-2 flex-wrap">
-            {suggestedDurations.map((duration) => (
-              <button
-                key={duration.days}
-                onClick={() => handleSuggestedDuration(duration.days)}
-                className="px-3 py-1 text-sm bg-gray-100 rounded-full hover:bg-gray-200"
-              >
-                {duration.label}
-              </button>
-            ))}
-          </div>
+            onChange={handleChange}
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+            disabled={isLoading}
+          >
+            <option value="1">1 day</option>
+            <option value="3">3 days</option>
+            <option value="7">1 week</option>
+            <option value="14">2 weeks</option>
+            <option value="30">1 month</option>
+          </select>
+          <p className="text-sm text-gray-500 mt-1">
+            The bet will expire after this period if not resolved.
+          </p>
         </div>
-
-        {/* Bet Condition Input */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        
+        <div className="mb-6">
+          <label htmlFor="condition" className="block text-gray-700 font-medium mb-2">
             Bet Condition
           </label>
           <textarea
+            id="condition"
             name="condition"
             value={formData.condition}
-            onChange={handleInputChange}
-            className="w-full p-2 border rounded-md h-24"
-            placeholder="Describe what this bet is about..."
+            onChange={handleChange}
+            placeholder="e.g., 'It will rain tomorrow in New York'"
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary h-24"
+            disabled={isLoading}
           />
           <p className="text-sm text-gray-500 mt-1">
-            Be specific about the condition and how the winner will be determined.
+            Clearly state the condition that will determine the outcome of the bet.
           </p>
         </div>
-
-        {error && (
-          <div className="text-red-500 text-sm">{error}</div>
-        )}
-
+        
         <button
-          onClick={handleCreateBet}
-          disabled={loading}
-          className="w-full bg-primary text-white py-2 rounded-md hover:bg-primary-dark disabled:bg-gray-300 disabled:cursor-not-allowed"
+          type="submit"
+          className="w-full py-3 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors disabled:bg-gray-400"
+          disabled={isLoading}
         >
-          {loading ? "Creating..." : "Create Bet"}
+          {isLoading ? 'Creating...' : 'Create Bet'}
         </button>
-
-        <div className="mt-4 bg-gray-50 p-4 rounded-lg">
-          <h3 className="font-medium mb-2">How it works:</h3>
-          <ul className="text-sm text-gray-600 space-y-1">
-            <li>• Create a bet by setting an amount and duration</li>
-            <li>• Share with friends to join</li>
-            <li>• Winner takes all yield as reward</li>
-            <li>• Your CELO stake is safe until the bet ends</li>
-          </ul>
+      </form>
+      
+      {/* Confirmation Modal */}
+      {showConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">Confirm Bet Creation</h3>
+            <p className="mb-4">
+              You are about to create a bet with the following details:
+            </p>
+            <div className="bg-gray-50 p-4 rounded-md mb-4">
+              <div className="mb-2">
+                <span className="font-medium">Stake Amount:</span> {formData.stakeAmount} CELO
+              </div>
+              <div className="mb-2">
+                <span className="font-medium">Duration:</span> {formData.duration} days
+              </div>
+              <div>
+                <span className="font-medium">Condition:</span> {formData.condition}
+              </div>
+            </div>
+            <p className="mb-4 text-sm text-gray-600">
+              Your stake will be deposited into a Uniswap liquidity pool to generate yield. Both you and your opponent will receive your original stake back, regardless of the outcome.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmation(false)}
+                className="flex-1 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateBet}
+                className="flex-1 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-
-      <ConfirmationModal
-        isOpen={showConfirmation}
-        onClose={() => setShowConfirmation(false)}
-        onConfirm={handleConfirmedCreate}
-        data={formData}
-      />
+      )}
     </div>
   );
 };
