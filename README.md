@@ -64,6 +64,22 @@ npm run dev
    - Everyone keeps their stake
    - No risk of losing principal
 
+## Tokenomics
+
+### BetM3 Token
+- **Utility**: Used for governance and rewards in the betting ecosystem
+- **Distribution**: Earned through participation in bets
+- **Rewards**: 10 BETM3 for winners, 5 BETM3 for participants
+
+### Yield Generation
+- **Source**: Stakes are deposited into Aave lending pools to generate yield
+- **Market Dependency**: Yield rates are dependent on current market conditions in Aave
+- **Safety Mechanism**: The contract ensures users always receive at least their original stake back, even in case of negative market performance
+- **Distribution**: 
+  - 80% of yield goes to the winner
+  - 20% of yield goes to the loser
+  - In case of disputes or expired bets with no consensus, yield is split equally
+
 ## Development
 
 ### Project Structure

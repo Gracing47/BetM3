@@ -3,17 +3,22 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+interface IMintableBurnableToken is IERC20 {
+    function mint(address to, uint256 amount) external;
+    function burn(uint256 amount) external;
+}
+
 contract AavePoolMock {
-    IERC20 public token;
+    IMintableBurnableToken public token;
     mapping(address => uint256) public balances;
-    uint256 public yieldRate = 10; // 10% yield by default
+    int256 public yieldRate = 10; // 10% yield by default, can be negative for testing
 
     constructor(address _token) {
-        token = IERC20(_token);
+        token = IMintableBurnableToken(_token);
     }
 
-    // Set the yield rate (in percentage)
-    function setYieldRate(uint256 _yieldRate) external {
+    // Set the yield rate (in percentage, can be negative)
+    function setYieldRate(int256 _yieldRate) external {
         yieldRate = _yieldRate;
     }
 
@@ -21,6 +26,20 @@ contract AavePoolMock {
         require(asset == address(token), "Invalid token");
         token.transferFrom(msg.sender, address(this), amount);
         balances[onBehalfOf] += amount;
+    }
+
+    // Simulate market loss by burning tokens
+    function simulateMarketLoss(uint256 lossPercentage) external {
+        uint256 totalBalance = token.balanceOf(address(this));
+        uint256 lossAmount = (totalBalance * lossPercentage) / 100;
+        
+        // Burn tokens to simulate loss
+        try token.burn(lossAmount) {
+            // Successfully burned tokens
+        } catch {
+            // If burn is not available, we can transfer to a dead address
+            token.transfer(address(0x000000000000000000000000000000000000dEaD), lossAmount);
+        }
     }
 
     function withdraw(address asset, uint256 amount, address to) external returns (uint256) {
@@ -34,13 +53,32 @@ contract AavePoolMock {
         
         require(amount <= balance, "Insufficient balance");
         
-        // Calculate yield
-        uint256 yieldAmount = (amount * yieldRate) / 100;
-        uint256 totalAmount = amount + yieldAmount;
+        // Calculate yield (can be negative)
+        int256 yieldAmount = (int256(amount) * yieldRate) / 100;
+        uint256 totalAmount;
+        
+        if (yieldAmount >= 0) {
+            // Positive yield - mint additional tokens if needed
+            totalAmount = amount + uint256(yieldAmount);
+            uint256 currentBalance = token.balanceOf(address(this));
+            if (currentBalance < totalAmount) {
+                // Mint additional tokens to cover the yield
+                try token.mint(address(this), totalAmount - currentBalance) {
+                    // Successfully minted tokens
+                } catch {
+                    // If minting fails, adjust totalAmount to available balance
+                    totalAmount = currentBalance;
+                }
+            }
+        } else {
+            // Negative yield - ensure we don't underflow
+            uint256 absYieldAmount = uint256(-yieldAmount);
+            totalAmount = amount > absYieldAmount ? amount - absYieldAmount : amount;
+        }
         
         balances[msg.sender] -= amount;
         
-        // Transfer principal + yield
+        // Transfer principal + yield (or principal - loss)
         token.transfer(to, totalAmount);
         
         return totalAmount;

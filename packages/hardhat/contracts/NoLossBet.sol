@@ -16,6 +16,7 @@ contract NoLossBet is ERC721, Ownable {
         bool creatorOutcome;
         bool opponentOutcome;
         bool resolved;
+        uint256 expiration; // Timestamp, wann die Wette abläuft
     }
 
     mapping(uint256 => Bet) public bets;
@@ -24,8 +25,9 @@ contract NoLossBet is ERC721, Ownable {
     IERC20 public betM3Token;      // Dein BetM3Token für Belohnungen
     IPool public aavePool;         // Aave-Pool für Yield
     uint256 public betCounter;
+    uint256 public constant BET_DURATION = 14 days; // Standarddauer für Wetten
 
-    event BetCreated(uint256 betId, address creator, string condition);
+    event BetCreated(uint256 betId, address creator, string condition, uint256 expiration);
     event BetAccepted(uint256 betId, address opponent);
     event OutcomeSubmitted(uint256 betId, bool success);
     event BetResolved(uint256 betId, uint256 totalYield);
@@ -45,6 +47,9 @@ contract NoLossBet is ERC721, Ownable {
         uint256 betId = betCounter++;
         _mint(msg.sender, betId);
         tokenURIs[betId] = _tokenURI;
+        
+        uint256 expirationTime = block.timestamp + BET_DURATION;
+        
         bets[betId] = Bet({
             creator: msg.sender,
             opponent: address(0),
@@ -53,15 +58,17 @@ contract NoLossBet is ERC721, Ownable {
             condition: _condition,
             creatorOutcome: false,
             opponentOutcome: false,
-            resolved: false
+            resolved: false,
+            expiration: expirationTime
         });
-        emit BetCreated(betId, msg.sender, _condition);
+        emit BetCreated(betId, msg.sender, _condition, expirationTime);
     }
 
     function acceptBet(uint256 _betId) external {
         Bet storage bet = bets[_betId];
         require(bet.opponent == address(0), "Bet already accepted");
         require(msg.sender != bet.creator, "Creator cannot accept own bet");
+        require(block.timestamp < bet.expiration, "Bet has expired");
         require(celoToken.transferFrom(msg.sender, address(this), bet.opponentStake), "Stake transfer failed");
         bet.opponent = msg.sender;
         _transfer(bet.creator, msg.sender, _betId);
@@ -75,6 +82,7 @@ contract NoLossBet is ERC721, Ownable {
         Bet storage bet = bets[_betId];
         require(msg.sender == bet.creator || msg.sender == bet.opponent, "Not a participant");
         require(!bet.resolved, "Bet already resolved");
+        require(bet.opponent != address(0), "Bet not accepted yet");
         if (msg.sender == bet.creator) {
             bet.creatorOutcome = _success;
         } else {
@@ -86,12 +94,19 @@ contract NoLossBet is ERC721, Ownable {
     function resolveBet(uint256 _betId) external {
         Bet storage bet = bets[_betId];
         require(!bet.resolved, "Bet already resolved");
+        require(bet.opponent != address(0), "Bet not accepted yet");
+        
+        // Wenn die Wette abgelaufen ist, kann sie aufgelöst werden, auch wenn die Ergebnisse nicht übereinstimmen
+        if (block.timestamp >= bet.expiration) {
+            return resolveExpiredBet(_betId);
+        }
+        
         require(bet.creatorOutcome == bet.opponentOutcome, "Outcomes do not match");
         bet.resolved = true;
         uint256 totalStake = bet.creatorStake + bet.opponentStake;
         aavePool.withdraw(address(celoToken), type(uint256).max, address(this));
         uint256 balance = celoToken.balanceOf(address(this));
-        uint256 yield = balance > totalStake ? balance - totalStake : 0;
+        uint256 yield = balance >= totalStake ? balance - totalStake : 0;
         if (bet.creatorOutcome) {
             celoToken.transfer(bet.creator, bet.creatorStake + (yield * 80 / 100));
             celoToken.transfer(bet.opponent, bet.opponentStake + (yield * 20 / 100));
@@ -106,15 +121,56 @@ contract NoLossBet is ERC721, Ownable {
         emit BetResolved(_betId, yield);
     }
 
-    function resolveDispute(uint256 _betId, bool _creatorWins) external onlyOwner {
+    // Neue Funktion zur Auflösung abgelaufener Wetten
+    function resolveExpiredBet(uint256 _betId) internal {
         Bet storage bet = bets[_betId];
+        require(block.timestamp >= bet.expiration, "Bet not yet expired");
         require(!bet.resolved, "Bet already resolved");
-        require(bet.creatorOutcome != bet.opponentOutcome, "No dispute");
+        
         bet.resolved = true;
         uint256 totalStake = bet.creatorStake + bet.opponentStake;
         aavePool.withdraw(address(celoToken), type(uint256).max, address(this));
         uint256 balance = celoToken.balanceOf(address(this));
-        uint256 yield = balance > totalStake ? balance - totalStake : 0;
+        uint256 yield = balance >= totalStake ? balance - totalStake : 0;
+        
+        // Bei abgelaufenen Wetten:
+        // 1. Wenn beide Ergebnisse übereinstimmen, normal auflösen
+        if (bet.creatorOutcome == bet.opponentOutcome && bet.creatorOutcome != false) {
+            if (bet.creatorOutcome) {
+                celoToken.transfer(bet.creator, bet.creatorStake + (yield * 80 / 100));
+                celoToken.transfer(bet.opponent, bet.opponentStake + (yield * 20 / 100));
+                betM3Token.transfer(bet.creator, 10 * 10 ** 18);
+                betM3Token.transfer(bet.opponent, 5 * 10 ** 18);
+            } else {
+                celoToken.transfer(bet.creator, bet.creatorStake + (yield * 20 / 100));
+                celoToken.transfer(bet.opponent, bet.opponentStake + (yield * 80 / 100));
+                betM3Token.transfer(bet.creator, 5 * 10 ** 18);
+                betM3Token.transfer(bet.opponent, 10 * 10 ** 18);
+            }
+        } 
+        // 2. Wenn die Ergebnisse nicht übereinstimmen oder nicht eingereicht wurden, Einsätze zurückgeben und Yield teilen
+        else {
+            celoToken.transfer(bet.creator, bet.creatorStake + (yield / 2));
+            celoToken.transfer(bet.opponent, bet.opponentStake + (yield / 2));
+            // Kleinere Belohnungen für beide, da keine Einigung erzielt wurde
+            betM3Token.transfer(bet.creator, 2 * 10 ** 18);
+            betM3Token.transfer(bet.opponent, 2 * 10 ** 18);
+        }
+        
+        emit BetResolved(_betId, yield);
+    }
+
+    function resolveDispute(uint256 _betId, bool _creatorWins) external onlyOwner {
+        Bet storage bet = bets[_betId];
+        require(!bet.resolved, "Bet already resolved");
+        require(bet.opponent != address(0), "Bet not accepted yet");
+        require(bet.creatorOutcome != bet.opponentOutcome, "No dispute");
+        
+        bet.resolved = true;
+        uint256 totalStake = bet.creatorStake + bet.opponentStake;
+        aavePool.withdraw(address(celoToken), type(uint256).max, address(this));
+        uint256 balance = celoToken.balanceOf(address(this));
+        uint256 yield = balance >= totalStake ? balance - totalStake : 0;
         if (_creatorWins) {
             celoToken.transfer(bet.creator, bet.creatorStake + yield);
             celoToken.transfer(bet.opponent, bet.opponentStake);

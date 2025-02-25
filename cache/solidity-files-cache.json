@@ -81,7 +81,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -109,14 +109,14 @@
       ]
     },
     "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\AavePoolMock.sol": {
-      "lastModificationDate": 1740428655563,
-      "contentHash": "635ef68fb79e15bbf1c7613d847bfae3",
+      "lastModificationDate": 1740479095002,
+      "contentHash": "f74e245cd60ee83481da2887b5087662",
       "sourceName": "packages/hardhat/contracts/AavePoolMock.sol",
       "solcConfig": {
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -142,7 +142,8 @@
         "^0.8.19"
       ],
       "artifacts": [
-        "AavePoolMock"
+        "AavePoolMock",
+        "IMintableBurnableToken"
       ]
     },
     "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\extensions\\IERC20Metadata.sol": {
@@ -153,7 +154,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -190,7 +191,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -229,7 +230,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -264,7 +265,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -294,14 +295,14 @@
       ]
     },
     "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\NoLossBet.sol": {
-      "lastModificationDate": 1740425970784,
-      "contentHash": "ce499313e2b0474da915071b7a14ae26",
+      "lastModificationDate": 1740478705593,
+      "contentHash": "a013d9946668f3edee16b52a2699005d",
       "sourceName": "packages/hardhat/contracts/NoLossBet.sol",
       "solcConfig": {
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -341,7 +342,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -384,7 +385,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -422,7 +423,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -457,7 +458,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -495,7 +496,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -532,7 +533,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -567,7 +568,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -604,7 +605,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -641,7 +642,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -676,7 +677,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -711,7 +712,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -746,7 +747,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -781,7 +782,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -816,7 +817,7 @@
         "version": "0.8.19",
         "settings": {
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
