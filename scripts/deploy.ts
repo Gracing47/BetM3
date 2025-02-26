@@ -1,6 +1,7 @@
 import { ethers } from "hardhat";
 import { run } from "hardhat";
 import * as fs from 'fs';
+import * as path from 'path';
 
 async function main() {
   try {
@@ -93,16 +94,17 @@ async function main() {
         betM3Token: betM3TokenAddress
       }
     };
-    fs.writeFileSync(
-      'deployment-localhost.json',
-      JSON.stringify(deploymentInfo, null, 2)
-    );
+
+    // Convert to JSON string with proper formatting
+    const deploymentJson = JSON.stringify(deploymentInfo, null, 2);
     
-    // Also save to react-app directory
-    fs.writeFileSync(
-      '../react-app/deployment-localhost.json',
-      JSON.stringify(deploymentInfo, null, 2)
-    );
+    // Define file paths
+    const hardhatDeploymentPath = path.resolve('deployment-localhost.json');
+    const reactAppDeploymentPath = path.resolve('../react-app/deployment-localhost.json');
+    
+    // Write to both locations
+    fs.writeFileSync(hardhatDeploymentPath, deploymentJson);
+    fs.writeFileSync(reactAppDeploymentPath, deploymentJson);
     
     console.log("\nDeployment info saved to deployment-localhost.json in both hardhat and react-app directories");
 
