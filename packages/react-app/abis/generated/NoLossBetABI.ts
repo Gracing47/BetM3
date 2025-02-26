@@ -250,6 +250,11 @@ export const NoLossBetABI = [
         "internalType": "uint256",
         "name": "_betId",
         "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "_prediction",
+        "type": "bool"
       }
     ],
     "name": "acceptBet",

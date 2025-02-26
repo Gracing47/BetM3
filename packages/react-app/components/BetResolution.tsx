@@ -96,7 +96,7 @@ const BetResolution: React.FC<BetResolutionProps> = ({ bet, onResolved }) => {
           <p className="font-medium">{formatAddress(bet.creator)}</p>
           <p className="text-sm mt-1">
             {creatorHasSubmitted 
-              ? `Submitted: ${bet.creatorOutcome ? 'True' : 'False'}` 
+              ? `Submitted: ${bet.creatorOutcome ? 'Yes' : 'No'}` 
               : 'Not submitted yet'}
           </p>
         </div>
@@ -105,7 +105,7 @@ const BetResolution: React.FC<BetResolutionProps> = ({ bet, onResolved }) => {
           <p className="font-medium">{formatAddress(bet.opponent)}</p>
           <p className="text-sm mt-1">
             {opponentHasSubmitted 
-              ? `Submitted: ${bet.opponentOutcome ? 'True' : 'False'}` 
+              ? `Submitted: ${bet.opponentOutcome ? 'Yes' : 'No'}` 
               : 'Not submitted yet'}
           </p>
         </div>
@@ -123,7 +123,7 @@ const BetResolution: React.FC<BetResolutionProps> = ({ bet, onResolved }) => {
                   : 'bg-gray-100 hover:bg-gray-200'
               }`}
             >
-              True
+              Yes
             </button>
             <button
               onClick={() => setSelectedOutcome(false)}
@@ -133,7 +133,7 @@ const BetResolution: React.FC<BetResolutionProps> = ({ bet, onResolved }) => {
                   : 'bg-gray-100 hover:bg-gray-200'
               }`}
             >
-              False
+              No
             </button>
           </div>
           <button

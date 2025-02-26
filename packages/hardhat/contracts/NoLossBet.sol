@@ -56,7 +56,7 @@ contract NoLossBet is ERC721, Ownable {
     uint256 public constant BET_DURATION = 14 days; // Standarddauer für Wetten
 
     event BetCreated(uint256 betId, address creator, string condition, uint256 expiration);
-    event BetAccepted(uint256 betId, address opponent);
+    event BetAccepted(uint256 betId, address opponent, bool prediction);
     event OutcomeSubmitted(uint256 betId, bool success);
     event BetResolved(uint256 betId, uint256 totalYield);
     event DisputeResolved(uint256 betId, address winner);
@@ -79,7 +79,9 @@ contract NoLossBet is ERC721, Ownable {
     }
 
     function createBet(uint256 _opponentStake, string calldata _condition, string calldata _tokenURI) external {
-        require(celoToken.transferFrom(msg.sender, address(this), 100 * 10 ** 18), "Stake transfer failed");
+        // Minimum stake is 100 CELO
+        uint256 creatorStake = 100 * 10 ** 18; // 100 CELO
+        require(celoToken.transferFrom(msg.sender, address(this), creatorStake), "Stake transfer failed");
         uint256 betId = betCounter++;
         _mint(msg.sender, betId);
         tokenURIs[betId] = _tokenURI;
@@ -89,7 +91,7 @@ contract NoLossBet is ERC721, Ownable {
         bets[betId] = Bet({
             creator: msg.sender,
             opponent: address(0),
-            creatorStake: 100 * 10 ** 18, // 100 CELO
+            creatorStake: creatorStake, // 100 CELO
             opponentStake: _opponentStake,
             condition: _condition,
             creatorOutcome: false,
@@ -100,7 +102,7 @@ contract NoLossBet is ERC721, Ownable {
         emit BetCreated(betId, msg.sender, _condition, expirationTime);
     }
 
-    function acceptBet(uint256 _betId) external {
+    function acceptBet(uint256 _betId, bool _prediction) external {
         Bet storage bet = bets[_betId];
         require(bet.opponent == address(0), "Bet already accepted");
         require(msg.sender != bet.creator, "Creator cannot accept own bet");
@@ -108,6 +110,7 @@ contract NoLossBet is ERC721, Ownable {
         require(celoToken.transferFrom(msg.sender, address(this), bet.opponentStake), "Stake transfer failed");
         
         bet.opponent = msg.sender;
+        bet.opponentOutcome = _prediction; // Set the opponent's initial outcome
         _transfer(bet.creator, msg.sender, _betId);
         
         // Für Uniswap benötigen wir gleiche Mengen beider Tokens
@@ -138,7 +141,7 @@ contract NoLossBet is ERC721, Ownable {
         // LP-Token-Menge für diese Wette speichern
         betLiquidity[_betId] = liquidity;
         
-        emit BetAccepted(_betId, msg.sender);
+        emit BetAccepted(_betId, msg.sender, _prediction);
     }
 
     function submitOutcome(uint256 _betId, bool _success) external {

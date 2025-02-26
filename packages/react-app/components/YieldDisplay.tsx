@@ -79,7 +79,7 @@ const YieldDisplay: React.FC<YieldDisplayProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-sm text-gray-500 mb-1">Initial Stake</p>
-              <p className="text-xl font-semibold">{formatTokenAmount(initialStake)}</p>
+              <p className="text-xl font-semibold">{formatTokenAmount(initialStake, 'CELO')}</p>
             </div>
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-sm text-gray-500 mb-1">Time in Pool</p>
@@ -101,7 +101,7 @@ const YieldDisplay: React.FC<YieldDisplayProps> = ({
                   style={{ width: `${Math.min(yieldPercentage * 5, 100)}%` }}
                 ></div>
               </div>
-              <p className="text-right mt-1 text-sm">{formatTokenAmount(estimatedYield)}</p>
+              <p className="text-right mt-1 text-sm">{formatTokenAmount(estimatedYield, 'CELO')}</p>
             </div>
             
             <div>
@@ -115,7 +115,7 @@ const YieldDisplay: React.FC<YieldDisplayProps> = ({
                   style={{ width: `${Math.min(impermanentLossPercentage * 5, 100)}%` }}
                 ></div>
               </div>
-              <p className="text-right mt-1 text-sm">{formatTokenAmount(impermanentLoss)}</p>
+              <p className="text-right mt-1 text-sm">{formatTokenAmount(impermanentLoss, 'CELO')}</p>
             </div>
             
             <div className="pt-4 border-t border-gray-200">
@@ -125,7 +125,7 @@ const YieldDisplay: React.FC<YieldDisplayProps> = ({
                   {parseFloat(netYield) > 0 ? '+' : ''}{(parseFloat(netYield) / parseFloat(initialStake) * 100).toFixed(2)}%
                 </p>
               </div>
-              <p className="text-right text-lg font-semibold">{formatTokenAmount(netYield)}</p>
+              <p className="text-right text-lg font-semibold">{formatTokenAmount(netYield, 'CELO')}</p>
             </div>
           </div>
           

@@ -58,16 +58,16 @@ export const formatDuration = (seconds: number): string => {
  * @param symbol The token symbol (e.g., "CELO")
  * @returns Formatted token amount string
  */
-export const formatTokenAmount = (amount: string | number, symbol: string = 'CELO'): string => {
+export const formatTokenAmount = (amount: string | number, symbol: string = ''): string => {
   try {
     // Always treat the input as wei and format it to CELO
     const formatted = ethers.formatUnits(amount.toString(), 18);
-    // Format to 4 decimal places
-    const value = parseFloat(formatted).toFixed(4);
-    return `${value} ${symbol}`;
+    // Format to 2 decimal places
+    const value = parseFloat(formatted).toFixed(2);
+    return symbol ? `${value} ${symbol}` : value;
   } catch (err) {
     console.error("Error formatting token amount:", err);
-    return `0 ${symbol}`;
+    return symbol ? `0 ${symbol}` : '0';
   }
 };
 

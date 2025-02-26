@@ -45,6 +45,14 @@ async function main() {
     const lpTokenAddress = await lpToken.getAddress();
     console.log("LPToken deployed to:", lpTokenAddress);
 
+    // Deploy AavePoolMock
+    console.log("Deploying AavePoolMock...");
+    const AavePoolMockFactory = await ethers.getContractFactory("AavePoolMock");
+    const aavePoolMock = await AavePoolMockFactory.deploy(mockCELOAddress);
+    await aavePoolMock.waitForDeployment();
+    const aavePoolMockAddress = await aavePoolMock.getAddress();
+    console.log("AavePoolMock deployed to:", aavePoolMockAddress);
+
     // Deploy UniswapPoolMock
     console.log("Deploying UniswapPoolMock...");
     const UniswapPoolMockFactory = await ethers.getContractFactory("UniswapPoolMock");
@@ -75,6 +83,7 @@ async function main() {
     console.log({
       noLossBet: noLossBetAddress,
       uniswapPoolMock: uniswapPoolMockAddress,
+      aavePoolMock: aavePoolMockAddress,
       mockCELO: mockCELOAddress,
       cUSDToken: cUSDTokenAddress,
       lpToken: lpTokenAddress,
@@ -87,6 +96,7 @@ async function main() {
       addresses: {
         noLossBet: noLossBetAddress,
         uniswapPoolMock: uniswapPoolMockAddress,
+        aavePoolMock: aavePoolMockAddress,
         celoToken: mockCELOAddress,
         mockCELO: mockCELOAddress,
         cUSDToken: cUSDTokenAddress,
