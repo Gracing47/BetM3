@@ -44,9 +44,19 @@ let BET_M3_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 let UNISWAP_POOL_MOCK_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9";
 let LP_TOKEN_ADDRESS = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
 
-// Import the deployment addresses directly
+// Import the deployment addresses from the shared location
 try {
-  const deploymentInfo = require('../deployment-localhost.json');
+  // First try to load from the shared location (project root)
+  let deploymentInfo;
+  try {
+    deploymentInfo = require('../../deployment-localhost.json');
+    console.log("Loaded contract addresses from shared deployment file");
+  } catch (e) {
+    // Fallback to local copy for backward compatibility
+    deploymentInfo = require('../deployment-localhost.json');
+    console.log("Loaded contract addresses from local deployment file");
+  }
+  
   if (deploymentInfo && deploymentInfo.addresses) {
     // Update addresses from deployment file
     NO_LOSS_BET_ADDRESS = deploymentInfo.addresses.noLossBet;
@@ -55,7 +65,6 @@ try {
     BET_M3_TOKEN_ADDRESS = deploymentInfo.addresses.betM3Token;
     UNISWAP_POOL_MOCK_ADDRESS = deploymentInfo.addresses.uniswapPoolMock;
     LP_TOKEN_ADDRESS = deploymentInfo.addresses.lpToken;
-    console.log("Loaded contract addresses from deployment-localhost.json");
     console.log("Using NoLossBet address:", NO_LOSS_BET_ADDRESS);
     console.log("Using MockCELO address:", MOCK_CELO_ADDRESS);
     console.log("Using UniswapPoolMock address:", UNISWAP_POOL_MOCK_ADDRESS);

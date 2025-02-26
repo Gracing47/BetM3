@@ -1,6 +1,7 @@
 import { ethers } from "hardhat";
 import { run } from "hardhat";
 import * as fs from 'fs';
+import * as path from 'path';
 
 async function main() {
   try {
@@ -81,7 +82,7 @@ async function main() {
       betM3Token: betM3TokenAddress
     });
 
-    // Save deployment addresses to a file in both hardhat and react-app directories
+    // Save deployment addresses to a single shared file
     const deploymentInfo = {
       network: "localhost",
       addresses: {
@@ -93,18 +94,56 @@ async function main() {
         betM3Token: betM3TokenAddress
       }
     };
-    fs.writeFileSync(
-      'deployment-localhost.json',
-      JSON.stringify(deploymentInfo, null, 2)
-    );
+
+    // Define the shared deployment file path (in the project root)
+    const sharedDeploymentPath = path.join(__dirname, '../../../deployment-localhost.json');
+    console.log("Shared deployment path:", sharedDeploymentPath);
     
-    // Also save to react-app directory
-    fs.writeFileSync(
-      '../react-app/deployment-localhost.json',
-      JSON.stringify(deploymentInfo, null, 2)
-    );
-    
-    console.log("\nDeployment info saved to deployment-localhost.json in both hardhat and react-app directories");
+    // Save to the shared location
+    try {
+      fs.writeFileSync(
+        sharedDeploymentPath,
+        JSON.stringify(deploymentInfo, null, 2)
+      );
+      console.log("\nDeployment info saved to shared location:", sharedDeploymentPath);
+    } catch (error) {
+      console.error("Error saving to shared location:", error);
+      console.log("Trying alternative path...");
+      
+      // Try an alternative path
+      const altSharedPath = path.join(__dirname, '../../deployment-localhost.json');
+      console.log("Alternative shared path:", altSharedPath);
+      try {
+        fs.writeFileSync(
+          altSharedPath,
+          JSON.stringify(deploymentInfo, null, 2)
+        );
+        console.log("Deployment info saved to alternative shared location:", altSharedPath);
+      } catch (altError) {
+        console.error("Error saving to alternative shared location:", altError);
+      }
+    }
+
+    // Create a copy in the hardhat directory for backward compatibility
+    try {
+      const hardhatPath = path.join(__dirname, '../deployment-localhost.json');
+      console.log("Hardhat deployment path:", hardhatPath);
+      
+      // Remove existing file if it exists
+      if (fs.existsSync(hardhatPath)) {
+        fs.unlinkSync(hardhatPath);
+        console.log("Removed existing hardhat deployment file");
+      }
+      
+      // Write the file directly
+      fs.writeFileSync(
+        hardhatPath,
+        JSON.stringify(deploymentInfo, null, 2)
+      );
+      console.log("Created copy in hardhat directory");
+    } catch (error) {
+      console.warn("Could not create hardhat directory file:", error);
+    }
 
   } catch (error) {
     console.error("Deployment failed!");
