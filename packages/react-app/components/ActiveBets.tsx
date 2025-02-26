@@ -6,20 +6,6 @@ import { formatTokenAmount } from "../utils/format";
 import { ethers } from 'ethers';
 import { NoLossBetABI } from "../abis/generated";
 
-// Import the deployment addresses directly
-let NO_LOSS_BET_ADDRESS = "0x0165878a594ca255338adfa4d48449f69242eb8f";
-
-// Try to load from deployment file
-try {
-  const deploymentInfo = require('../deployment-localhost.json');
-  if (deploymentInfo && deploymentInfo.addresses) {
-    NO_LOSS_BET_ADDRESS = deploymentInfo.addresses.noLossBet;
-    console.log("Loaded NoLossBet address from deployment file:", NO_LOSS_BET_ADDRESS);
-  }
-} catch (error) {
-  console.warn("Could not load deployment-localhost.json, using hardcoded address:", NO_LOSS_BET_ADDRESS);
-}
-
 interface Bet {
   id: string;
   creator: string;
@@ -32,6 +18,7 @@ interface Bet {
   resolved: boolean;
   expirationTime: number;
   status: 'Created' | 'Active' | 'Completed' | 'Cancelled';
+  commentText?: string; // Optional comment text
 }
 
 interface BetEvent {
@@ -47,7 +34,7 @@ interface ActiveBetsProps {
 }
 
 export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: externalRefreshTrigger, onRefresh }) => {
-  const { acceptBet, getBet, address, approveToken } = useWeb3();
+  const { acceptBet, getBet, address, approveToken, getNoLossBetAddress } = useWeb3();
   const [bets, setBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState<{ [key: string]: boolean }>({});
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +65,10 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: external
         
         const provider = new ethers.BrowserProvider(window.ethereum);
         console.log("Provider initialized:", provider);
+        
+        // Get the NoLossBet address from the Web3 context
+        const NO_LOSS_BET_ADDRESS = getNoLossBetAddress();
+        console.log("Using NoLossBet address from Web3 context:", NO_LOSS_BET_ADDRESS);
         
         // Check if the contract exists at the specified address
         try {
@@ -364,19 +355,23 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: external
     setSelectedBet(bet);
   };
 
-  const handleConfirmJoin = async (prediction: boolean) => {
+  const handleConfirmJoin = async (prediction: boolean, stake?: string, commentText?: string) => {
     if (!selectedBet) return;
     
     setLoading(prev => ({ ...prev, [selectedBet.id]: true }));
     setError(null);
 
     try {
+      // Verwende den angepassten Einsatz, wenn angegeben, sonst den Standard
+      const stakeAmount = stake || selectedBet.opponentStake || selectedBet.amount;
+      console.log(`Joining bet with stake amount: ${stakeAmount} and comment: ${commentText || 'none'}`);
+
       // First approve token spending
-      const approveTx = await approveToken(selectedBet.opponentStake || selectedBet.amount);
+      const approveTx = await approveToken(stakeAmount);
       await approveTx.wait();
 
-      // Then join the bet with the selected prediction
-      const tx = await acceptBet(selectedBet.id, prediction);
+      // Then join the bet with the selected prediction, stake amount, and optional comment
+      const tx = await acceptBet(selectedBet.id, prediction, stakeAmount, commentText);
       await tx.wait();
 
       // Close the modal
@@ -491,7 +486,7 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: external
         <JoinBetModal
           bet={selectedBet}
           onClose={() => setSelectedBet(null)}
-          onJoin={(prediction) => handleConfirmJoin(prediction)}
+          onJoin={(prediction, stake, commentText) => handleConfirmJoin(prediction, stake, commentText)}
           isLoading={loading[selectedBet.id] || false}
         />
       )}

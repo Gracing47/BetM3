@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
-import { run } from "hardhat";
 import * as fs from 'fs';
+import * as path from 'path';
 
 async function main() {
   try {
@@ -12,7 +12,7 @@ async function main() {
     console.log("Account balance:", ethers.formatEther(balance), "ETH");
 
     console.log("Starting deployment...");
-    
+
     // Deploy BetM3Token first
     console.log("Deploying BetM3Token...");
     const BetM3TokenFactory = await ethers.getContractFactory("BetM3Token");
@@ -28,7 +28,7 @@ async function main() {
     await mockCELO.waitForDeployment();
     const mockCELOAddress = await mockCELO.getAddress();
     console.log("MockCELO deployed to:", mockCELOAddress);
-    
+
     // Deploy cUSDToken
     console.log("Deploying cUSDToken...");
     const cUSDTokenFactory = await ethers.getContractFactory("cUSDToken");
@@ -36,7 +36,7 @@ async function main() {
     await cUSDToken.waitForDeployment();
     const cUSDTokenAddress = await cUSDToken.getAddress();
     console.log("cUSDToken deployed to:", cUSDTokenAddress);
-    
+
     // Deploy LPToken
     console.log("Deploying LPToken...");
     const LPTokenFactory = await ethers.getContractFactory("LPToken");
@@ -44,14 +44,6 @@ async function main() {
     await lpToken.waitForDeployment();
     const lpTokenAddress = await lpToken.getAddress();
     console.log("LPToken deployed to:", lpTokenAddress);
-
-    // Deploy AavePoolMock
-    console.log("Deploying AavePoolMock...");
-    const AavePoolMockFactory = await ethers.getContractFactory("AavePoolMock");
-    const aavePoolMock = await AavePoolMockFactory.deploy(mockCELOAddress);
-    await aavePoolMock.waitForDeployment();
-    const aavePoolMockAddress = await aavePoolMock.getAddress();
-    console.log("AavePoolMock deployed to:", aavePoolMockAddress);
 
     // Deploy UniswapPoolMock
     console.log("Deploying UniswapPoolMock...");
@@ -79,37 +71,67 @@ async function main() {
     const noLossBetAddress = await noLossBet.getAddress();
     console.log("NoLossBet deployed to:", noLossBetAddress);
 
-    console.log("\nDeployment complete!");
-    console.log({
-      noLossBet: noLossBetAddress,
-      uniswapPoolMock: uniswapPoolMockAddress,
-      aavePoolMock: aavePoolMockAddress,
-      mockCELO: mockCELOAddress,
-      cUSDToken: cUSDTokenAddress,
-      lpToken: lpTokenAddress,
-      betM3Token: betM3TokenAddress
-    });
+    // Mint initial tokens for testing
+    console.log("Minting initial tokens for testing...");
+    
+    // Mint 10,000 CELO to the deployer
+    const mintAmount = ethers.parseEther("10000");
+    await mockCELO.mint(await deployer.getAddress(), mintAmount);
+    console.log(`Minted ${ethers.formatEther(mintAmount)} CELO to deployer`);
+    
+    // Mint 10,000 cUSD to the NoLossBet contract for liquidity
+    await cUSDToken.mint(noLossBetAddress, mintAmount);
+    console.log(`Minted ${ethers.formatEther(mintAmount)} cUSD to NoLossBet contract`);
+    
+    // Mint 10,000 BetM3Token to the NoLossBet contract for rewards
+    await betM3Token.mint(noLossBetAddress, mintAmount);
+    console.log(`Minted ${ethers.formatEther(mintAmount)} BetM3Token to NoLossBet contract`);
 
-    // Save deployment addresses to a file
+    console.log("\nDeployment complete!");
+    
+    // Create deployment info object
     const deploymentInfo = {
       network: "localhost",
       addresses: {
         noLossBet: noLossBetAddress,
-        uniswapPoolMock: uniswapPoolMockAddress,
-        aavePoolMock: aavePoolMockAddress,
-        celoToken: mockCELOAddress,
         mockCELO: mockCELOAddress,
         cUSDToken: cUSDTokenAddress,
         lpToken: lpTokenAddress,
+        uniswapPoolMock: uniswapPoolMockAddress,
         betM3Token: betM3TokenAddress
       }
     };
+
+    // Define paths for deployment files
+    const rootDeploymentPath = path.resolve(process.cwd(), '..', '..', 'deployment-localhost.json');
+    const hardhatDeploymentPath = path.resolve(process.cwd(), 'deployment-localhost.json');
+    const reactAppDeploymentPath = path.resolve(process.cwd(), '..', 'react-app', 'deployment-localhost.json');
+    
+    // Save deployment info to root directory
     fs.writeFileSync(
-      'deployment-localhost.json',
+      rootDeploymentPath,
       JSON.stringify(deploymentInfo, null, 2)
     );
-    console.log("\nDeployment info saved to deployment-localhost.json");
-
+    console.log(`Deployment info saved to: ${rootDeploymentPath}`);
+    
+    // Copy to hardhat directory
+    fs.writeFileSync(
+      hardhatDeploymentPath,
+      JSON.stringify(deploymentInfo, null, 2)
+    );
+    console.log(`Deployment info copied to: ${hardhatDeploymentPath}`);
+    
+    // Copy to react-app directory
+    fs.writeFileSync(
+      reactAppDeploymentPath,
+      JSON.stringify(deploymentInfo, null, 2)
+    );
+    console.log(`Deployment info copied to: ${reactAppDeploymentPath}`);
+    
+    // Log the addresses for reference
+    console.log("\nContract Addresses:");
+    console.log(JSON.stringify(deploymentInfo.addresses, null, 2));
+    
   } catch (error) {
     console.error("Deployment failed!");
     if (error instanceof Error) {

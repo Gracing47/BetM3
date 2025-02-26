@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { NoLossBetABI, MockCELOABI, UniswapPoolMockABI, BetM3TokenABI } from '../abis/generated/index';
+import deploymentData from '../../deployment-localhost.json';
 
 // Definiere die globale Window-Schnittstelle mit ethereum
 declare global {
@@ -15,13 +16,17 @@ declare global {
   }
 }
 
-interface Web3ContextType {
+export interface Web3ContextType {
   address: string | null;
   getUserAddress: () => Promise<string>;
   disconnect: () => void;
   isConnecting: boolean;
-  createBet: (amount: string, condition: string, durationDays: string, prediction: boolean) => Promise<any>;
-  acceptBet: (betId: string, prediction: boolean) => Promise<any>;
+  networkName: string;
+  switchToCelo: () => Promise<void>;
+  switchToHardhat: () => Promise<void>;
+  switchToCeloMainnet: () => Promise<void>;
+  createBet: (creatorStake: string, opponentStake: string, condition: string, durationDays: string, prediction: boolean) => Promise<any>;
+  acceptBet: (betId: string, prediction: boolean, customStake?: string, commentText?: string) => Promise<any>;
   getBet: (betId: string) => Promise<any>;
   submitOutcome: (betId: string, outcome: boolean) => Promise<any>;
   resolveBet: (betId: string) => Promise<any>;
@@ -30,19 +35,21 @@ interface Web3ContextType {
   getCELOBalance: (address: string) => Promise<bigint>;
   getNextBetId: () => Promise<number>;
   mintCELO: (amount: string) => Promise<any>;
-  networkName: string;
-  switchToCelo: () => Promise<void>;
-  switchToHardhat: () => Promise<void>;
-  switchToCeloMainnet: () => Promise<void>;
+  getNoLossBetAddress: () => string;
+  getMockCELOAddress: () => string;
+  getCUSDTokenAddress: () => string;
+  getBetM3TokenAddress: () => string;
+  getUniswapPoolMockAddress: () => string;
+  getLPTokenAddress: () => string;
 }
 
 // Lokale Hardhat-Adressen (müssen für Testnet oder Mainnet aktualisiert werden)
-let NO_LOSS_BET_ADDRESS = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
-let MOCK_CELO_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"; // Korrekte MockCELO-Adresse
-let CUSD_TOKEN_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
-let BET_M3_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-let UNISWAP_POOL_MOCK_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9";
-let LP_TOKEN_ADDRESS = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
+let NO_LOSS_BET_ADDRESS = "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE";
+let MOCK_CELO_ADDRESS = "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82";
+let CUSD_TOKEN_ADDRESS = "0x9A676e781A523b5d0C0e43731313A708CB607508";
+let BET_M3_TOKEN_ADDRESS = "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0";
+let UNISWAP_POOL_MOCK_ADDRESS = "0x959922bE3CAee4b8Cd9a407cc3ac1C251C2007B1";
+let LP_TOKEN_ADDRESS = "0x0B306BF915C4d645ff596e518fAf3F9669b97016";
 
 // Import the deployment addresses from the shared location
 try {
@@ -464,7 +471,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const createBet = useCallback(async (amount: string, condition: string, durationDays: string, prediction: boolean): Promise<any> => {
+  const createBet = useCallback(async (creatorStake: string, opponentStake: string, condition: string, durationDays: string, prediction: boolean): Promise<any> => {
     try {
       // First check if the Hardhat node is running
       try {
@@ -481,22 +488,20 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("Contracts not initialized. Make sure you're connected to the correct network.");
       }
       
-      // Validate minimum opponent stake
-      const minOpponentStake = 100;
-      if (parseFloat(amount) < minOpponentStake) {
-        throw new Error(`Opponent stake must be at least ${minOpponentStake} CELO`);
+      // Validate minimum creator stake
+      const minCreatorStake = 100;
+      if (parseFloat(creatorStake) < minCreatorStake) {
+        throw new Error(`Creator stake must be at least ${minCreatorStake} CELO`);
       }
       
-      // The contract has a fixed creator stake of 100 CELO
-      const creatorStake = ethers.parseEther("100");
-      
-      // Convert opponent stake to wei
-      const opponentStake = ethers.parseEther(amount);
+      // Convert stakes to wei
+      const creatorStakeWei = ethers.parseEther(creatorStake);
+      const opponentStakeWei = ethers.parseEther(opponentStake);
       
       // Generate a simple tokenURI for the NFT
       const tokenURI = `ipfs://betm3/${Date.now()}`;
       
-      console.log(`Creating bet with creator stake: 100 CELO (fixed for MVP), opponent stake: ${amount} CELO, condition: ${condition}, tokenURI: ${tokenURI}, prediction: ${prediction ? 'Yes' : 'No'}`);
+      console.log(`Creating bet with creator stake: ${creatorStake} CELO, opponent stake: ${opponentStake} CELO, condition: ${condition}, tokenURI: ${tokenURI}, prediction: ${prediction ? 'Yes' : 'No'}`);
       
       // First check if the user has enough balance
       const userAddress = await getUserAddress();
@@ -519,8 +524,8 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       
-      if (userBalance < creatorStake) {
-        throw new Error(`Insufficient CELO balance. You need at least 100 CELO to create a bet. Current balance: ${ethers.formatEther(userBalance)} CELO`);
+      if (userBalance < creatorStakeWei) {
+        throw new Error(`Insufficient CELO balance. You need at least ${creatorStake} CELO to create a bet. Current balance: ${ethers.formatEther(userBalance)} CELO`);
       }
       
       // Reset approval to ensure it's sufficient for the higher stake
@@ -531,7 +536,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log(`Current allowance: ${ethers.formatEther(currentAllowance)} CELO`);
         
         // Only approve if needed
-        if (currentAllowance < creatorStake) {
+        if (currentAllowance < creatorStakeWei) {
           // Reset approval to 0 first to handle some tokens that require this
           if (currentAllowance > BigInt(0)) {
             console.log("Setting approval to zero first...");
@@ -544,7 +549,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Now approve the full amount needed
           console.log("Approving tokens for the contract...");
-          const approveTx = await mockCELO.approve(noLossBet.target, creatorStake, {
+          const approveTx = await mockCELO.approve(noLossBet.target, creatorStakeWei, {
             gasLimit: 200000 // Increase gas limit to prevent underestimation
           });
           console.log("Approval transaction sent:", approveTx.hash);
@@ -578,16 +583,15 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("Could not verify token allowance. Please try again.");
       }
       
-      if (newAllowance < creatorStake) {
+      if (newAllowance < creatorStakeWei) {
         throw new Error("Token approval failed. Please try again.");
       }
       
       console.log("Creating bet...");
       // Now create the bet with higher gas limit to prevent underestimation
       try {
-        // Note: The contract's createBet function doesn't accept a prediction parameter
-        // The prediction is stored in the UI for later use with submitOutcome
-        const tx = await noLossBet.createBet(opponentStake, condition, tokenURI, {
+        // Call the updated createBet function with the creator stake
+        const tx = await noLossBet.createBet(creatorStakeWei, opponentStakeWei, condition, tokenURI, {
           gasLimit: 2000000 // Increase gas limit to prevent underestimation
         });
         
@@ -647,178 +651,77 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [getContracts, getUserAddress, getCELOBalance]);
 
-  // Implement the missing functions
-  const acceptBet = useCallback(async (betId: string, prediction: boolean = true): Promise<any> => {
+  // Interface aktualisieren
+  const acceptBet = useCallback(async (betId: string, prediction: boolean, customStake?: string, commentText?: string): Promise<any> => {
     try {
-      // First check if the Hardhat node is running
-      try {
-        const provider = new ethers.JsonRpcProvider('http://localhost:8545');
-        await provider.getBlockNumber();
-      } catch (providerError) {
-        console.error("Could not connect to local Hardhat node:", providerError);
-        throw new Error("Could not connect to local Hardhat node. Make sure it's running with 'npx hardhat node'");
-      }
-      
+      console.log(`Accepting bet ID ${betId} with prediction: ${prediction}, custom stake: ${customStake || 'default'}, comment: ${commentText || 'none'}`);
+
       const { noLossBet, mockCELO } = await getContracts();
-      
+
       if (!noLossBet || !mockCELO) {
-        throw new Error("Contracts not initialized. Make sure you're connected to the correct network.");
+        throw new Error("Contracts not initialized");
       }
-      
-      console.log(`Accepting bet with ID: ${betId}`);
-      
-      // First get the bet details to determine the opponent stake
-      const bet = await noLossBet.bets(betId);
-      const opponentStake = bet.opponentStake;
-      
-      console.log(`Bet requires opponent stake of: ${ethers.formatEther(opponentStake)} CELO`);
-      
-      // Check if the user has enough balance
+
       const userAddress = await getUserAddress();
       
-      // Get balance using a try-catch to handle potential errors
-      let userBalance;
+      // Konvertiere betId zu einer Zahl
+      const betIdNumber = parseInt(betId);
+      
+      // Überprüfe, ob die Wette existiert
       try {
-        userBalance = await mockCELO.balanceOf(userAddress);
-        console.log(`User balance: ${ethers.formatEther(userBalance)} CELO`);
-      } catch (balanceError) {
-        console.error("Error checking balance:", balanceError);
+        const betDetails = await noLossBet.bets(betIdNumber);
+        console.log("Bet details:", betDetails);
         
-        // Try with the getCELOBalance function as a fallback
-        try {
-          userBalance = await getCELOBalance(userAddress);
-          console.log(`User balance (fallback method): ${ethers.formatEther(userBalance)} CELO`);
-        } catch (fallbackError) {
-          console.error("Fallback balance check also failed:", fallbackError);
-          throw new Error("Could not check your CELO balance. Please make sure the Hardhat node is running and you're connected to the correct network.");
+        if (betDetails.creator === "0x0000000000000000000000000000000000000000") {
+          throw new Error(`Bet with ID ${betId} does not exist`);
         }
+        
+        if (betDetails.opponent !== "0x0000000000000000000000000000000000000000") {
+          throw new Error(`Bet with ID ${betId} has already been accepted by ${betDetails.opponent}`);
+        }
+        
+        if (betDetails.resolved) {
+          throw new Error(`Bet with ID ${betId} has already been resolved`);
+        }
+        
+        if (betDetails.expiration < Math.floor(Date.now() / 1000)) {
+          throw new Error(`Bet with ID ${betId} has expired`);
+        }
+      } catch (betError: any) {
+        console.error("Error checking bet details:", betError);
+        throw new Error(`Failed to check bet details: ${betError.message}`);
       }
       
-      if (userBalance < opponentStake) {
-        throw new Error(`Insufficient CELO balance. You need at least ${ethers.formatEther(opponentStake)} CELO to accept this bet. Current balance: ${ethers.formatEther(userBalance)} CELO`);
-      }
+      console.log(`Calling acceptBet with betId: ${betIdNumber}, prediction: ${prediction}`);
       
-      // Check current allowance
-      let currentAllowance;
+      // Use the updated acceptBet function with all parameters
+      let tx;
+      
       try {
-        currentAllowance = await mockCELO.allowance(userAddress, noLossBet.target);
-        console.log(`Current allowance: ${ethers.formatEther(currentAllowance)} CELO`);
-      } catch (allowanceError) {
-        console.error("Error checking allowance:", allowanceError);
-        throw new Error("Could not check token allowance. Please make sure you're connected to the correct network.");
-      }
-      
-      // If allowance is insufficient, request approval
-      if (currentAllowance < opponentStake) {
-        console.log("Approving tokens for the contract...");
-        try {
-          const approveTx = await mockCELO.approve(noLossBet.target, opponentStake, {
-            gasLimit: 200000 // Increase gas limit to prevent underestimation
+        // Check if customStake is provided
+        if (customStake) {
+          const customStakeAmount = ethers.parseUnits(customStake, 18);
+          tx = await noLossBet.acceptBet(betIdNumber, prediction, customStakeAmount, commentText || "", {
+            gasLimit: 3000000
           });
-          console.log("Approval transaction sent:", approveTx.hash);
-          
-          // Wait for the approval transaction to be mined
-          const approveReceipt = await approveTx.wait();
-          console.log("Approval confirmed in block:", approveReceipt.blockNumber);
-        } catch (approveError: any) {
-          console.error("Error during token approval:", approveError);
-          
-          // Provide more specific error message based on the error
-          if (approveError.message.includes("user rejected")) {
-            throw new Error("You rejected the approval transaction. Please approve to continue.");
-          } else if (approveError.message.includes("insufficient funds")) {
-            throw new Error("You don't have enough ETH to pay for gas. Please add ETH to your wallet.");
-          } else {
-            throw new Error(`Failed to approve tokens: ${approveError.message}`);
-          }
+        } else {
+          // Use the default stake amount
+          tx = await noLossBet.acceptBet(betIdNumber, prediction, 0, commentText || "", {
+            gasLimit: 3000000
+          });
         }
-      } else {
-        console.log("Sufficient allowance already exists, skipping approval");
-      }
-      
-      // Verify the allowance was set correctly
-      let newAllowance;
-      try {
-        newAllowance = await mockCELO.allowance(userAddress, noLossBet.target);
-        console.log(`New allowance after approval: ${ethers.formatEther(newAllowance)} CELO`);
-      } catch (allowanceError) {
-        console.error("Error checking new allowance:", allowanceError);
-        throw new Error("Could not verify token allowance. Please try again.");
-      }
-      
-      if (newAllowance < opponentStake) {
-        throw new Error("Token approval failed. Please try again.");
-      }
-      
-      console.log("Accepting bet...");
-      // Now accept the bet with higher gas limit to prevent underestimation
-      try {
-        // Pass the prediction parameter to the acceptBet function
-        const tx = await noLossBet.acceptBet(betId, prediction, {
-          gasLimit: 2000000 // Increase gas limit to prevent underestimation
-        });
         
         console.log("Bet acceptance transaction sent:", tx.hash);
-        
-        // Wait for the transaction to be confirmed
-        const receipt = await tx.wait();
-        console.log("Bet acceptance confirmed in block:", receipt.blockNumber);
-        
-        // After accepting the bet, check if there's a stored prediction for the creator
-        // and submit both outcomes
-        try {
-          // Get the creator's prediction from localStorage
-          const predictionKey = `bet_${betId}_creator_prediction`;
-          const creatorPredictionStr = localStorage.getItem(predictionKey);
-          
-          if (creatorPredictionStr) {
-            const creatorPrediction = creatorPredictionStr === 'true';
-            console.log(`Retrieved creator's prediction for bet ID ${betId}: ${creatorPrediction}`);
-            
-            // Submit the creator's outcome
-            console.log(`Submitting creator's outcome: ${creatorPrediction}`);
-            const creatorSubmitTx = await noLossBet.submitOutcome(betId, creatorPrediction, {
-              gasLimit: 500000
-            });
-            await creatorSubmitTx.wait();
-            console.log("Creator's outcome submitted successfully");
-            
-            // Submit the opponent's outcome (current user)
-            console.log(`Submitting opponent's outcome (prediction: ${prediction})`);
-            const opponentSubmitTx = await noLossBet.submitOutcome(betId, prediction, {
-              gasLimit: 500000
-            });
-            await opponentSubmitTx.wait();
-            console.log("Opponent's outcome submitted successfully");
-            
-            // Clear the stored prediction
-            localStorage.removeItem(predictionKey);
-          }
-        } catch (submitError) {
-          console.error("Error submitting outcomes after bet acceptance:", submitError);
-          // Don't throw here, as the bet was accepted successfully
-        }
-        
         return tx;
-      } catch (acceptError: any) {
-        console.error("Error accepting bet:", acceptError);
-        
-        // Provide more specific error message based on the error
-        if (acceptError.message.includes("user rejected")) {
-          throw new Error("You rejected the transaction. Please confirm to accept the bet.");
-        } else if (acceptError.message.includes("insufficient funds")) {
-          throw new Error("You don't have enough ETH to pay for gas. Please add ETH to your wallet.");
-        } else if (acceptError.message.includes("execution reverted")) {
-          throw new Error(`Contract execution reverted: ${acceptError.message}. This might be due to insufficient allowance or balance.`);
-        } else {
-          throw new Error(`Failed to accept bet: ${acceptError.message}`);
-        }
+      } catch (txError: any) {
+        console.error("Error accepting bet:", txError);
+        throw new Error(`Failed to accept bet: ${txError.message}`);
       }
-    } catch (err) {
-      console.error('Error accepting bet:', err);
-      throw err;
+    } catch (err: any) {
+      console.error("Error accepting bet:", err);
+      throw new Error(`Failed to accept bet: ${err.message}`);
     }
-  }, [getContracts, getUserAddress, getCELOBalance]);
+  }, []);
 
   const getBet = useCallback(async (betId: string): Promise<any> => {
     try {
@@ -1019,6 +922,31 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Add getter functions for contract addresses
+  const getNoLossBetAddress = useCallback((): string => {
+    return NO_LOSS_BET_ADDRESS;
+  }, []);
+
+  const getMockCELOAddress = useCallback((): string => {
+    return MOCK_CELO_ADDRESS;
+  }, []);
+
+  const getCUSDTokenAddress = useCallback((): string => {
+    return CUSD_TOKEN_ADDRESS;
+  }, []);
+
+  const getBetM3TokenAddress = useCallback((): string => {
+    return BET_M3_TOKEN_ADDRESS;
+  }, []);
+
+  const getUniswapPoolMockAddress = useCallback((): string => {
+    return UNISWAP_POOL_MOCK_ADDRESS;
+  }, []);
+
+  const getLPTokenAddress = useCallback((): string => {
+    return LP_TOKEN_ADDRESS;
+  }, []);
+
   return (
     <Web3Context.Provider
       value={{
@@ -1026,6 +954,10 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         getUserAddress,
         disconnect,
         isConnecting,
+        networkName,
+        switchToCelo,
+        switchToHardhat,
+        switchToCeloMainnet,
         createBet,
         acceptBet,
         getBet,
@@ -1036,10 +968,12 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         getCELOBalance,
         getNextBetId,
         mintCELO,
-        networkName,
-        switchToCelo,
-        switchToHardhat,
-        switchToCeloMainnet,
+        getNoLossBetAddress,
+        getMockCELOAddress,
+        getCUSDTokenAddress,
+        getBetM3TokenAddress,
+        getUniswapPoolMockAddress,
+        getLPTokenAddress
       }}
     >
       {children}

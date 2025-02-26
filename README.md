@@ -1,124 +1,166 @@
-# BetM3 - Risk-Free Social Betting on Celo
+# NoLossBet - Decentralized Betting Platform on Celo
 
-BetM3 is a decentralized betting platform built on Celo that combines social betting with yield generation. Create and join bets with friends while your stakes generate yield through Ubeswap integration.
+NoLossBet is a decentralized betting platform built on the Celo blockchain that allows users to create and participate in bets without losing their principal stake. The platform uses yield farming strategies to generate returns on staked tokens, creating a risk-free betting experience where users can only win.
 
 ## Features
 
-- 🎲 **Risk-Free Betting**: All stakes are preserved through yield generation
-- 🏆 **Winner Takes Yield**: Winners earn rewards from generated yield
-- 👥 **Social Betting**: Create and join bets with friends
-- 📈 **Yield Generation**: Stakes earn yield through Ubeswap
-- 🔒 **Secure**: Built on Celo blockchain with smart contract security
+### Smart Contract Features
 
-## Screenshots
+- **No-Loss Betting**: Users' principal stakes are preserved through yield farming
+- **Customizable Stakes**: Create bets with custom stake amounts (minimum 100 CELO for creators)
+- **Flexible Joining**: Join bets with custom stake amounts (minimum 10 CELO for opponents)
+- **Comment System**: Add comments when joining bets to express your thoughts
+- **Yield Distribution**: Winners receive a larger portion of the yield generated
+- **NFT Representation**: Each bet is represented as an NFT that transfers to the opponent when accepted
+- **Dispute Resolution**: Built-in mechanism for resolving disputed outcomes
+- **Reward Tokens**: BetM3 tokens are distributed as additional rewards to participants
 
-### Before Wallet Connection
-![Frontend Not Connected](packages/react-app/public/Frontend_not_connected.jpg)
+### Frontend Features
 
-### After Wallet Connection
-![Frontend Connected](packages/react-app/public/Frontend_connected.jpg)
+- **Modern UI**: Clean, responsive interface built with React
+- **Wallet Integration**: Seamless connection with MetaMask and other Ethereum wallets
+- **Bet Creation**: Intuitive form for creating new bets
+- **Bet Discovery**: Browse and filter active bets
+- **Bet Management**: Track and manage your active and past bets
+- **Yield Visualization**: See potential and actual yields on your bets
 
-## Quick Start
+## Architecture
+
+The project consists of several key components:
+
+### Smart Contracts
+
+1. **NoLossBet.sol**: The main contract that handles bet creation, acceptance, and resolution
+2. **MockCELO.sol**: A mock CELO token for testing purposes
+3. **cUSDToken.sol**: A mock cUSD stablecoin for testing purposes
+4. **LPToken.sol**: Represents liquidity pool tokens
+5. **UniswapPoolMock.sol**: Simulates Uniswap liquidity pool for yield generation
+6. **BetM3Token.sol**: Reward token distributed to bet participants
+
+### Frontend
+
+- React application with Tailwind CSS for styling
+- ethers.js for blockchain interaction
+- Context API for state management
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v14+)
+- npm or yarn
+- MetaMask or another Ethereum wallet
+
+### Installation
 
 1. Clone the repository:
-```bash
-git clone https://github.com/Gracing47/BetM3.git
-cd BetM3
-```
+   ```
+   git clone https://github.com/yourusername/bet-m-3.git
+   cd bet-m-3
+   ```
 
 2. Install dependencies:
-```bash
-cd packages/react-app
-npm install
+   ```
+   # Install Hardhat dependencies
+   cd packages/hardhat
+   npm install
+
+   # Install React app dependencies
+   cd ../react-app
+   npm install
+   ```
+
+### Local Development
+
+1. Start a local Hardhat node:
+   ```
+   cd packages/hardhat
+   npx hardhat node
+   ```
+
+2. Deploy the contracts to the local network:
+   ```
+   # In a new terminal
+   cd packages/hardhat
+   npx hardhat run scripts/deploy-localhost.ts --network localhost
+   ```
+
+3. Start the React app:
+   ```
+   cd packages/react-app
+   npm run dev
+   ```
+
+4. Connect MetaMask to the local Hardhat network:
+   - Network Name: Hardhat
+   - RPC URL: http://127.0.0.1:8545
+   - Chain ID: 31337
+   - Currency Symbol: ETH
+
+## Bet Flow
+
+### Creating a Bet
+
+1. Connect your wallet
+2. Navigate to the "Create Bet" page
+3. Enter your stake amount (minimum 100 CELO)
+4. Specify the opponent's stake amount
+5. Describe the bet condition
+6. Select your prediction (Yes/No)
+7. Submit the transaction
+
+### Joining a Bet
+
+1. Browse available bets
+2. Click "Join" on a bet you're interested in
+3. View the bet details, including the bet ID
+4. Enter your stake amount (minimum 10 CELO, or the amount specified by the creator)
+5. Select your prediction (Yes/No)
+6. Optionally add a comment
+7. Confirm and submit the transaction
+
+### Resolving a Bet
+
+1. Once the outcome is known, both parties submit the outcome
+2. If both agree, the bet is automatically resolved
+3. If there's a disagreement, the dispute resolution mechanism is triggered
+4. Upon resolution, stakes are returned to both parties along with yield distribution
+
+## Deployment
+
+The project includes an automated deployment script that:
+
+1. Deploys all necessary contracts
+2. Mints initial tokens for testing
+3. Updates deployment information in all relevant locations
+4. Ensures consistent contract addresses across the application
+
+To deploy to a new network:
+
+```
+cd packages/hardhat
+npx hardhat run scripts/deploy-localhost.ts --network <network-name>
 ```
 
-3. Start the development server:
-```bash
-npm run dev
+## Testing
+
+Run the test suite to verify contract functionality:
+
 ```
-
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
-
-## Smart Contracts
-
-- SimpleBetManager: `0x910273a1E3396e728CDe8B0748Fe1C0A36501BDA`
-- cUSD Token: `0x765DE816845861e75A25fCA122bb6898B8B1282a`
-
-## How It Works
-
-1. **Create a Bet**
-   - Set stake amount in cUSD
-   - Define bet duration
-   - Specify bet condition
-   - Share with friends
-
-2. **Join a Bet**
-   - Connect your wallet
-   - Approve token spending
-   - Join existing bets
-   - Track your stakes
-
-3. **Earn Rewards**
-   - Stakes generate yield
-   - Winners earn rewards
-   - Everyone keeps their stake
-   - No risk of losing principal
-
-## Tokenomics
-
-### BetM3 Token
-- **Utility**: Used for governance and rewards in the betting ecosystem
-- **Distribution**: Earned through participation in bets
-- **Rewards**: 10 BETM3 for winners, 5 BETM3 for participants
-
-### Yield Generation
-- **Source**: Stakes are deposited into Aave lending pools to generate yield
-- **Market Dependency**: Yield rates are dependent on current market conditions in Aave
-- **Safety Mechanism**: The contract ensures users always receive at least their original stake back, even in case of negative market performance
-- **Distribution**: 
-  - 80% of yield goes to the winner
-  - 20% of yield goes to the loser
-  - In case of disputes or expired bets with no consensus, yield is split equally
-
-## Development
-
-### Project Structure
+cd packages/hardhat
+npx hardhat test
 ```
-packages/
-├── hardhat/          # Smart contracts and tests
-└── react-app/        # Frontend application
-    ├── components/   # React components
-    ├── contexts/     # Web3 and app contexts
-    ├── pages/        # Next.js pages
-    └── utils/        # Utility functions
-```
-
-### Technologies Used
-- Next.js + TypeScript
-- Tailwind CSS
-- ethers.js v6
-- Hardhat
-- Celo SDK
 
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Resources
-
-- [Documentation](/team)
-- [Celo Developer Resources](https://docs.celo.org/)
-- [Ubeswap Documentation](https://docs.ubeswap.io/)
-
-## Contact
-
-- Project Updates: [Warpcast](https://warpcast.com/gracify)
-- Technical Support: [GitHub Issues](https://github.com/Gracing47/BetM3/issues)
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgements
+
+- Celo Foundation for blockchain infrastructure
+- OpenZeppelin for secure contract libraries
+- Uniswap for liquidity pool inspiration

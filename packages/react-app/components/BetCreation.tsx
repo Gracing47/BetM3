@@ -31,6 +31,7 @@ export const BetCreation: React.FC<BetCreationProps> = ({ onBetCreated }) => {
   const [mintSuccess, setMintSuccess] = useState(false);
   const [balance, setBalance] = useState<string>('0');
   const [isCheckingBalance, setIsCheckingBalance] = useState(false);
+  const [creatorStake, setCreatorStake] = useState('100');
 
   // Fetch user's CELO balance when component mounts or address changes
   useEffect(() => {
@@ -165,6 +166,7 @@ export const BetCreation: React.FC<BetCreationProps> = ({ onBetCreated }) => {
       const prediction = formData.prediction === true;
       
       const response = await createBet(
+        creatorStake,
         stakeAmount,
         formData.condition,
         durationDays,

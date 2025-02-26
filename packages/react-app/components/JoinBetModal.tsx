@@ -18,7 +18,7 @@ interface JoinBetModalProps {
     status: 'Created' | 'Active' | 'Completed' | 'Cancelled';
   };
   onClose: () => void;
-  onJoin: (prediction: boolean) => Promise<void>;
+  onJoin: (prediction: boolean, stake?: string, commentText?: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -28,6 +28,23 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
   const [isMinting, setIsMinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mintSuccess, setMintSuccess] = useState(false);
+  const [customStake, setCustomStake] = useState<string>("");
+  const [stakeOption, setStakeOption] = useState<'default' | '10' | '100' | 'custom'>('default');
+  const [commentText, setCommentText] = useState<string>("");
+
+  // Berechne den tatsächlichen Einsatz basierend auf der ausgewählten Option
+  const getStakeAmount = () => {
+    switch (stakeOption) {
+      case '10':
+        return ethers.parseEther('10').toString();
+      case '100':
+        return ethers.parseEther('100').toString();
+      case 'custom':
+        return customStake ? ethers.parseEther(customStake).toString() : bet.opponentStake;
+      default:
+        return bet.opponentStake;
+    }
+  };
 
   const handleJoinBet = async () => {
     if (selectedPrediction === null) {
@@ -36,8 +53,8 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
     }
     
     try {
-      // Pass the selected prediction to the onJoin function
-      await onJoin(selectedPrediction);
+      // Pass the selected prediction, stake amount and comment text to the onJoin function
+      await onJoin(selectedPrediction, getStakeAmount(), commentText);
     } catch (err: any) {
       console.error("Error joining bet:", err);
       setError(err.message || "Failed to join bet. Please try again.");
@@ -51,7 +68,13 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
     
     try {
       // Mint enough CELO tokens to join the bet (add a little extra for gas)
-      const amountToMint = (parseFloat(ethers.formatEther(bet.opponentStake)) + 10).toString();
+      const stakeAmount = stakeOption === 'default' 
+        ? parseFloat(ethers.formatEther(bet.opponentStake)) 
+        : stakeOption === 'custom' 
+          ? parseFloat(customStake || "0") 
+          : parseInt(stakeOption);
+          
+      const amountToMint = (stakeAmount + 10).toString();
       await mintCELO(amountToMint);
       setMintSuccess(true);
       
@@ -66,6 +89,9 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
       setIsMinting(false);
     }
   };
+
+  // Formatieren des ursprünglichen Einsatzes
+  const defaultStakeAmount = ethers.formatEther(bet.opponentStake || '0');
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -93,10 +119,6 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
             <p className="font-medium">{formatTokenAmount(bet.amount, 'CELO')}</p>
           </div>
           <div>
-            <p className="text-gray-500">Your Stake</p>
-            <p className="font-medium">{formatTokenAmount(bet.opponentStake, 'CELO')}</p>
-          </div>
-          <div>
             <p className="text-gray-500">Expires In</p>
             <p className="font-medium">
               {Math.max(0, bet.expirationTime - Math.floor(Date.now() / 1000)) > 0 
@@ -104,6 +126,82 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
                 : 'Expired'}
             </p>
           </div>
+        </div>
+        
+        {/* Stake Selection */}
+        <div className="mb-6">
+          <p className="text-sm font-medium mb-2">Your Stake:</p>
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setStakeOption('default')}
+              className={`flex-1 py-2 px-3 rounded-md text-sm font-medium ${
+                stakeOption === 'default' 
+                  ? 'bg-primary text-white' 
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+              }`}
+            >
+              Default ({defaultStakeAmount} CELO)
+            </button>
+            <button
+              onClick={() => setStakeOption('10')}
+              className={`flex-1 py-2 px-3 rounded-md text-sm font-medium ${
+                stakeOption === '10' 
+                  ? 'bg-primary text-white' 
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+              }`}
+            >
+              10 CELO
+            </button>
+            <button
+              onClick={() => setStakeOption('100')}
+              className={`flex-1 py-2 px-3 rounded-md text-sm font-medium ${
+                stakeOption === '100' 
+                  ? 'bg-primary text-white' 
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+              }`}
+            >
+              100 CELO
+            </button>
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStakeOption('custom')}
+              className={`flex-none py-2 px-3 rounded-md text-sm font-medium ${
+                stakeOption === 'custom' 
+                  ? 'bg-primary text-white' 
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+              }`}
+            >
+              Custom
+            </button>
+            <input
+              type="number"
+              placeholder="Enter CELO amount"
+              value={customStake}
+              onChange={(e) => {
+                setCustomStake(e.target.value);
+                if (e.target.value) setStakeOption('custom');
+              }}
+              className="flex-1 border border-gray-300 rounded-md p-2 text-sm"
+              disabled={stakeOption !== 'custom'}
+            />
+          </div>
+        </div>
+        
+        {/* Comment Field */}
+        <div className="mb-6">
+          <p className="text-sm font-medium mb-2">Add a comment (optional):</p>
+          <textarea
+            placeholder="Share your thoughts on this bet..."
+            value={commentText}
+            onChange={(e) => setCommentText(e.target.value)}
+            className="w-full border border-gray-300 rounded-md p-2 text-sm min-h-[80px]"
+            maxLength={200}
+          />
+          <p className="text-xs text-gray-500 text-right mt-1">
+            {commentText.length}/200 characters
+          </p>
         </div>
         
         <div className="mb-6">
