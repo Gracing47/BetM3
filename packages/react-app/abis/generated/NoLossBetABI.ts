@@ -94,6 +94,24 @@ export const NoLossBetABI = [
         "internalType": "address",
         "name": "opponent",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "prediction",
+        "type": "bool"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "customStake",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "commentText",
+        "type": "string"
       }
     ],
     "name": "BetAccepted",
@@ -116,15 +134,21 @@ export const NoLossBetABI = [
       },
       {
         "indexed": false,
-        "internalType": "string",
-        "name": "condition",
-        "type": "string"
+        "internalType": "uint256",
+        "name": "creatorStake",
+        "type": "uint256"
       },
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "expiration",
+        "name": "opponentStake",
         "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "condition",
+        "type": "string"
       }
     ],
     "name": "BetCreated",
@@ -255,6 +279,34 @@ export const NoLossBetABI = [
         "internalType": "bool",
         "name": "_prediction",
         "type": "bool"
+      }
+    ],
+    "name": "acceptBet",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_betId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "_prediction",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_customStake",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "_commentText",
+        "type": "string"
       }
     ],
     "name": "acceptBet",
@@ -398,6 +450,11 @@ export const NoLossBetABI = [
         "internalType": "uint256",
         "name": "expiration",
         "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "commentText",
+        "type": "string"
       }
     ],
     "stateMutability": "view",
@@ -418,6 +475,11 @@ export const NoLossBetABI = [
   },
   {
     "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_creatorStake",
+        "type": "uint256"
+      },
       {
         "internalType": "uint256",
         "name": "_opponentStake",

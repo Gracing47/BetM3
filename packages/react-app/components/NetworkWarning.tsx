@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useWeb3 } from '../contexts/useWeb3';
 import { ethers } from 'ethers';
 
@@ -6,10 +6,21 @@ const NetworkWarning: React.FC = () => {
   const { networkName } = useWeb3();
   const [isHardhatRunning, setIsHardhatRunning] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const hardhatCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastCheckedRef = useRef<number>(0);
 
   useEffect(() => {
     const checkHardhatNode = async () => {
+      // Only check every 30 seconds to avoid excessive RPC calls
+      const now = Date.now();
+      if (now - lastCheckedRef.current < 30000 && lastCheckedRef.current !== 0) {
+        setIsLoading(false);
+        return;
+      }
+      
+      lastCheckedRef.current = now;
       setIsLoading(true);
+      
       try {
         const provider = new ethers.JsonRpcProvider('http://localhost:8545');
         await provider.getBlockNumber();
@@ -22,38 +33,42 @@ const NetworkWarning: React.FC = () => {
       }
     };
 
-    if (networkName === 'Hardhat Local') {
-      checkHardhatNode();
-    } else {
-      setIsHardhatRunning(null);
-      setIsLoading(false);
+    // Clear any existing timeout
+    if (hardhatCheckTimeoutRef.current) {
+      clearTimeout(hardhatCheckTimeoutRef.current);
     }
+    
+    // Schedule the check
+    hardhatCheckTimeoutRef.current = setTimeout(checkHardhatNode, 100);
+    
+    // Cleanup function
+    return () => {
+      if (hardhatCheckTimeoutRef.current) {
+        clearTimeout(hardhatCheckTimeoutRef.current);
+      }
+    };
   }, [networkName]);
 
-  if (isLoading || isHardhatRunning !== false || networkName !== 'Hardhat Local') {
+  if (isLoading || isHardhatRunning !== false) {
     return null;
   }
-
+  
   return (
-    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-      <div className="flex items-center">
-        <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-        </svg>
-        <div>
-          <p className="font-bold">Hardhat Node Not Running</p>
-          <p className="text-sm">
-            The local Hardhat node is not running. Please start it with:
-          </p>
-          <pre className="bg-gray-800 text-white p-2 rounded mt-2 text-xs overflow-x-auto">
+    <div className="fixed bottom-0 left-0 right-0 bg-yellow-100 p-4 border-t border-yellow-200 z-50">
+      <div className="container mx-auto flex flex-col md:flex-row items-center justify-between">
+        <div className="mb-3 md:mb-0">
+          <span className="font-bold text-yellow-800">⚠️ Hardhat Warning:</span>
+          <span className="ml-2 text-yellow-700">
+            Could not connect to Hardhat node. Make sure it's running with:
+          </span>
+        </div>
+        <div className="flex flex-col">
+          <code className="bg-yellow-50 px-3 py-2 rounded text-yellow-900 font-mono text-sm mb-2">
+            cd /path/to/project-root
+          </code>
+          <code className="bg-yellow-50 px-3 py-2 rounded text-yellow-900 font-mono text-sm">
             npx hardhat node
-          </pre>
-          <p className="text-sm mt-2">
-            Then deploy your contracts with:
-          </p>
-          <pre className="bg-gray-800 text-white p-2 rounded mt-2 text-xs overflow-x-auto">
-            npx hardhat run --network localhost scripts/deploy.js
-          </pre>
+          </code>
         </div>
       </div>
     </div>

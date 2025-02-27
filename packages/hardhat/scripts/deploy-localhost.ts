@@ -1,6 +1,7 @@
 import { ethers } from "hardhat";
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 
 async function main() {
   try {
@@ -131,6 +132,16 @@ async function main() {
     // Log the addresses for reference
     console.log("\nContract Addresses:");
     console.log(JSON.stringify(deploymentInfo.addresses, null, 2));
+    
+    // Run the script to update ABIs and contract addresses
+    console.log("\nUpdating ABIs and contract addresses...");
+    try {
+      const scriptPath = path.resolve(__dirname, 'update-abis-and-addresses.js');
+      execSync(`node ${scriptPath}`, { stdio: 'inherit' });
+      console.log("Successfully updated ABIs and contract addresses!");
+    } catch (error) {
+      console.error("Failed to update ABIs and contract addresses:", error);
+    }
     
   } catch (error) {
     console.error("Deployment failed!");

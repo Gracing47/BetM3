@@ -155,39 +155,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check if we're in a browser environment
   const isBrowser = typeof window !== 'undefined';
   
-  // If we're not in a browser environment, render only children
-  if (!isBrowser) {
-    // Create a dummy context value for server-side rendering
-    const dummyContextValue: Web3ContextType = {
-      address: null,
-      isConnecting: false,
-      networkName: '',
-      connectWallet: async () => {},
-      disconnect: () => {},
-      switchToHardhat: async () => {},
-      switchToCeloTestnet: async () => {},
-      switchToCeloMainnet: async () => {},
-      getUserAddress: async () => '',
-      getCELOBalance: async () => '0',
-      getNextBetId: async () => 0,
-      createBet: async () => { throw new Error('Not available server-side') },
-      acceptBet: async () => { throw new Error('Not available server-side') },
-      getBets: async () => [],
-      getNoLossBetAddress: () => '',
-      getMockCELOAddress: () => '',
-      getCUSDTokenAddress: () => '',
-      getBetM3TokenAddress: () => '',
-      getUniswapPoolMockAddress: () => '',
-      getLPTokenAddress: () => ''
-    };
-    
-    return (
-      <Web3Context.Provider value={dummyContextValue}>
-        {children}
-      </Web3Context.Provider>
-    );
-  }
-  
   // Load contract addresses
   let contractAddresses;
   try {
@@ -289,12 +256,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // Connect wallet
   const connectWallet = useCallback(async () => {
-    // Check if we're in a browser environment
-    if (typeof window === 'undefined') {
-      console.warn("Cannot connect wallet in server-side environment");
-      return;
-    }
-    
     if (!window.ethereum) {
       alert("Please install MetaMask to use this application.");
       return;
@@ -328,11 +289,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // Switch network functions
   const switchNetwork = async (networkConfig: NetworkConfig) => {
-    // Check if we're in a browser environment
-    if (typeof window === 'undefined') {
-      return;
-    }
-    
     if (!window.ethereum) return;
     
     try {
@@ -382,11 +338,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // Get user address
   const getUserAddress = useCallback(async (): Promise<string> => {
-    // Check if we're in a browser environment
-    if (typeof window === 'undefined') {
-      return '';
-    }
-    
     if (address) return address;
     
     if (provider) {
@@ -402,11 +353,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // Get CELO balance
   const getCELOBalance = useCallback(async (): Promise<string> => {
-    // Check if we're in a browser environment
-    if (typeof window === 'undefined') {
-      return "0";
-    }
-    
     if (!provider || !address) return "0";
     
     try {
@@ -420,11 +366,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // Get NoLossBet contract instance
   const getNoLossBetContract = useCallback(() => {
-    // Check if we're in a browser environment
-    if (typeof window === 'undefined') {
-      throw new Error("Cannot get contract in server-side environment");
-    }
-    
     if (!provider) throw new Error("Provider not initialized");
     
     return new ethers.Contract(
@@ -436,11 +377,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // Get next bet ID
   const getNextBetId = useCallback(async (): Promise<number> => {
-    // Check if we're in a browser environment
-    if (typeof window === 'undefined') {
-      return 0;
-    }
-    
     try {
       const contract = getNoLossBetContract();
       const nextBetId = await contract.nextBetId();
@@ -457,11 +393,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     endTime: number,
     creatorStake: string
   ): Promise<ethers.ContractTransaction> => {
-    // Check if we're in a browser environment
-    if (typeof window === 'undefined') {
-      throw new Error("Cannot create bet in server-side environment");
-    }
-    
     if (!signer) throw new Error("Wallet not connected");
     
     const contract = getNoLossBetContract();
@@ -516,14 +447,28 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(`Failed to check bet details: ${betError.message}`);
       }
       
-      // Simple approach: always use the 2-parameter version
-      console.log(`Calling simple acceptBet with: ${betIdNumber}, ${prediction}`);
-      return await contract.acceptBet(betIdNumber, prediction);
-    } catch (error: any) {
+      // Determine which overload of acceptBet to call
+      if (customStake && customStake !== '0') {
+        const customStakeAmount = ethers.BigNumber.from(customStake);
+        if (commentText && commentText.trim() !== "") {
+          console.log(`Calling overloaded acceptBet(uint256,bool,uint256,string) with: ${betIdNumber}, ${prediction}, ${customStakeAmount.toString()}, "${commentText}"`);
+          return await contract["acceptBet(uint256,bool,uint256,string)"](betIdNumber, prediction, customStakeAmount, commentText);
+        } else {
+          console.log(`Calling overloaded acceptBet(uint256,bool,uint256,string) with: ${betIdNumber}, ${prediction}, ${customStakeAmount.toString()}, ""`);
+          return await contract["acceptBet(uint256,bool,uint256,string)"](betIdNumber, prediction, customStakeAmount, "");
+        }
+      } else if (commentText && commentText.trim() !== "") {
+        console.log(`Calling overloaded acceptBet(uint256,bool,uint256,string) with: ${betIdNumber}, ${prediction}, 0, "${commentText}"`);
+        return await contract["acceptBet(uint256,bool,uint256,string)"](betIdNumber, prediction, 0, commentText);
+      } else {
+        console.log(`Calling acceptBet(uint256,bool) with: ${betIdNumber}, ${prediction}`);
+        return await contract["acceptBet(uint256,bool)"](betIdNumber, prediction);
+      }
+    } catch (error) {
       console.error("Error accepting bet:", error);
       throw new Error(`Failed to accept bet: ${error.message}`);
     }
-  }, [getNoLossBetContract]);
+  }, [signer, getNoLossBetContract]);
   
   // Bet interface for type safety
   interface Bet {
@@ -533,11 +478,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Get all bets
   const getBets = useCallback(async (): Promise<Bet[]> => {
-    // Check if we're in a browser environment
-    if (typeof window === 'undefined') {
-      return [];
-    }
-    
     try {
       const contract = getNoLossBetContract();
       const nextBetId = await contract.nextBetId();

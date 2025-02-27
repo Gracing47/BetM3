@@ -5,18 +5,16 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title BetM3Token
- * @dev Governance and utility token for the BetM3 ecosystem
+ * @title MockLPToken
+ * @dev A simple mock LP token for Uniswap simulations in tests
  */
-contract BetM3Token is ERC20, Ownable {
-    uint256 private constant INITIAL_SUPPLY = 100_000_000 * 10**18; // 100 million tokens
-    
-    constructor() ERC20("BetM3 Token", "BET") {
-        _mint(msg.sender, INITIAL_SUPPLY);
+contract MockLPToken is ERC20, Ownable {
+    constructor() ERC20("Mock LP Token", "MLPT") {
+        // No initial supply
     }
     
     /**
-     * @dev Mint new tokens
+     * @dev Mint new LP tokens to an address
      * @param to The address that will receive the minted tokens
      * @param amount The amount of tokens to mint
      */
@@ -25,10 +23,11 @@ contract BetM3Token is ERC20, Ownable {
     }
     
     /**
-     * @dev Burn tokens from sender's balance
+     * @dev Burn LP tokens from an address
+     * @param from The address that will lose tokens
      * @param amount The amount of tokens to burn
      */
-    function burn(uint256 amount) external {
-        _burn(msg.sender, amount);
+    function burn(address from, uint256 amount) external onlyOwner {
+        _burn(from, amount);
     }
-}
+} 

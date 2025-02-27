@@ -18,7 +18,7 @@ interface JoinBetModalProps {
     status: 'Created' | 'Active' | 'Completed' | 'Cancelled';
   };
   onClose: () => void;
-  onJoin: (prediction: boolean, stake?: string, commentText?: string) => Promise<void>;
+  onJoin: (prediction: boolean) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -51,10 +51,11 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
       setError("Please select Yes or No for your prediction");
       return;
     }
-    
+
     try {
-      // Pass the selected prediction, stake amount and comment text to the onJoin function
-      await onJoin(selectedPrediction, getStakeAmount(), commentText);
+      // Only pass the selected prediction to the onJoin function
+      // Removing customStake and commentText for now to simplify
+      await onJoin(selectedPrediction);
     } catch (err: any) {
       console.error("Error joining bet:", err);
       setError(err.message || "Failed to join bet. Please try again.");

@@ -43,8 +43,14 @@ export const BetCreation: React.FC<BetCreationProps> = ({ onBetCreated }) => {
           // Convert from wei to CELO
           const balanceInCELO = parseFloat(balanceBigInt.toString()) / 1e18;
           setBalance(balanceInCELO.toString());
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error fetching balance:', error);
+          // Set a default balance of 0 on error
+          setBalance('0');
+          // Show a helpful error message if appropriate
+          if (!error.toString().includes('Hardhat node is not available')) {
+            setError('Could not fetch your CELO balance. Make sure your Hardhat node is running.');
+          }
         } finally {
           setIsCheckingBalance(false);
         }

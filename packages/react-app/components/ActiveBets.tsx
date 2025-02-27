@@ -355,33 +355,29 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: external
     setSelectedBet(bet);
   };
 
-  const handleConfirmJoin = async (prediction: boolean, stake?: string, commentText?: string) => {
+  const handleConfirmJoin = async (prediction: boolean) => {
     if (!selectedBet) return;
-    
+
     setLoading(prev => ({ ...prev, [selectedBet.id]: true }));
     setError(null);
 
     try {
-      // Verwende den angepassten Einsatz, wenn angegeben, sonst den Standard
-      const stakeAmount = stake || selectedBet.opponentStake || selectedBet.amount;
-      console.log(`Joining bet with stake amount: ${stakeAmount} and comment: ${commentText || 'none'}`);
-
       // First approve token spending
-      const approveTx = await approveToken(stakeAmount);
+      const approveTx = await approveToken(selectedBet.opponentStake);
       await approveTx.wait();
 
-      // Then join the bet with the selected prediction, stake amount, and optional comment
-      const tx = await acceptBet(selectedBet.id, prediction, stakeAmount, commentText);
+      // Then join the bet with the selected prediction only
+      const tx = await acceptBet(selectedBet.id, prediction);
       await tx.wait();
 
       // Close the modal
       setSelectedBet(null);
-
-      // Refresh all bets
+      
+      // Refresh bets
       refreshBets();
-    } catch (err) {
-      console.error("Error joining bet:", err);
-      setError("Failed to join bet. Please try again.");
+    } catch (error: any) {
+      console.error("Error joining bet:", error);
+      setError(error.message);
     } finally {
       setLoading(prev => ({ ...prev, [selectedBet.id]: false }));
     }
@@ -486,7 +482,7 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: external
         <JoinBetModal
           bet={selectedBet}
           onClose={() => setSelectedBet(null)}
-          onJoin={(prediction, stake, commentText) => handleConfirmJoin(prediction, stake, commentText)}
+          onJoin={(prediction) => handleConfirmJoin(prediction)}
           isLoading={loading[selectedBet.id] || false}
         />
       )}

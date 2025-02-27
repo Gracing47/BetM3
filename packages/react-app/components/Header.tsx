@@ -4,7 +4,7 @@ import WalletConnectModal from './WalletConnectModal';
 import WalletInfo from './WalletInfo';
 
 const Header: React.FC = () => {
-  const { address, disconnect, isConnecting } = useWeb3();
+  const { address, isConnecting } = useWeb3();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const openModal = () => {
@@ -29,15 +29,7 @@ const Header: React.FC = () => {
 
             <div className="flex items-center gap-4">
               {address ? (
-                <>
-                  <WalletInfo />
-                  <button
-                    onClick={disconnect}
-                    className="text-sm text-red-600 hover:text-red-800 font-medium"
-                  >
-                    Disconnect
-                  </button>
-                </>
+                <WalletInfo />
               ) : (
                 <button
                   onClick={openModal}

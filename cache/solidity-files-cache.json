@@ -36,44 +36,6 @@
         "IERC20"
       ]
     },
-    "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\AavePoolMock.sol": {
-      "lastModificationDate": 1740479095002,
-      "contentHash": "f74e245cd60ee83481da2887b5087662",
-      "sourceName": "packages/hardhat/contracts/AavePoolMock.sol",
-      "solcConfig": {
-        "version": "0.8.19",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "@openzeppelin/contracts/token/ERC20/IERC20.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.19"
-      ],
-      "artifacts": [
-        "AavePoolMock",
-        "IMintableBurnableToken"
-      ]
-    },
     "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\extensions\\IERC20Metadata.sol": {
       "lastModificationDate": 1739507949628,
       "contentHash": "909ab67fc5c25033fe6cd364f8c056f9",
@@ -223,8 +185,8 @@
       ]
     },
     "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\NoLossBet.sol": {
-      "lastModificationDate": 1740483067749,
-      "contentHash": "81e846e7041714033c58979d794ab5b5",
+      "lastModificationDate": 1740589763238,
+      "contentHash": "2a8444f898d1895657bb8960bf54c8bf",
       "sourceName": "packages/hardhat/contracts/NoLossBet.sol",
       "solcConfig": {
         "version": "0.8.19",
@@ -252,7 +214,8 @@
       "imports": [
         "@openzeppelin/contracts/token/ERC721/ERC721.sol",
         "@openzeppelin/contracts/token/ERC20/IERC20.sol",
-        "@openzeppelin/contracts/access/Ownable.sol"
+        "@openzeppelin/contracts/access/Ownable.sol",
+        "@openzeppelin/contracts/security/ReentrancyGuard.sol"
       ],
       "versionPragmas": [
         "^0.8.19"
@@ -303,44 +266,6 @@
       ],
       "artifacts": [
         "ERC721"
-      ]
-    },
-    "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\node_modules\\@aave\\core-v3\\contracts\\interfaces\\IPool.sol": {
-      "lastModificationDate": 1740411647049,
-      "contentHash": "e977debb0018eb26ecec353110d66696",
-      "sourceName": "@aave/core-v3/contracts/interfaces/IPool.sol",
-      "solcConfig": {
-        "version": "0.8.19",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "./IPoolAddressesProvider.sol",
-        "../protocol/libraries/types/DataTypes.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "IPool"
       ]
     },
     "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\node_modules\\@openzeppelin\\contracts\\utils\\Address.sol": {
@@ -667,79 +592,9 @@
         "IERC165"
       ]
     },
-    "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\node_modules\\@aave\\core-v3\\contracts\\interfaces\\IPoolAddressesProvider.sol": {
-      "lastModificationDate": 1740411647057,
-      "contentHash": "75709782c90506d3ce968d5a6e06b900",
-      "sourceName": "@aave/core-v3/contracts/interfaces/IPoolAddressesProvider.sol",
-      "solcConfig": {
-        "version": "0.8.19",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "IPoolAddressesProvider"
-      ]
-    },
-    "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\node_modules\\@aave\\core-v3\\contracts\\protocol\\libraries\\types\\DataTypes.sol": {
-      "lastModificationDate": 1740411646859,
-      "contentHash": "5d70776caccb171510548c8c0279088e",
-      "sourceName": "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol",
-      "solcConfig": {
-        "version": "0.8.19",
-        "settings": {
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "DataTypes"
-      ]
-    },
     "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\BetM3Token.sol": {
-      "lastModificationDate": 1740425096143,
-      "contentHash": "3eeea394b710662e9ac52b69e6ae6507",
+      "lastModificationDate": 1740604133985,
+      "contentHash": "a89590aa4997e58ac51a36d449867b43",
       "sourceName": "packages/hardhat/contracts/BetM3Token.sol",
       "solcConfig": {
         "version": "0.8.19",
@@ -925,6 +780,153 @@
       ],
       "artifacts": [
         "MockCELO"
+      ]
+    },
+    "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\node_modules\\@openzeppelin\\contracts\\security\\ReentrancyGuard.sol": {
+      "lastModificationDate": 1739507949694,
+      "contentHash": "1535f8c0c68463f8c1b5239f7584e71f",
+      "sourceName": "@openzeppelin/contracts/security/ReentrancyGuard.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "ReentrancyGuard"
+      ]
+    },
+    "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\MockUniswapRouter.sol": {
+      "lastModificationDate": 1740604267081,
+      "contentHash": "5efc2b55fcf412900d1408c899a32cb1",
+      "sourceName": "packages/hardhat/contracts/MockUniswapRouter.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.19"
+      ],
+      "artifacts": [
+        "MockUniswapRouter"
+      ]
+    },
+    "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\MockERC20.sol": {
+      "lastModificationDate": 1740603883829,
+      "contentHash": "629748224af7bf84a6e51b0f8cfc1bbe",
+      "sourceName": "packages/hardhat/contracts/MockERC20.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC20/ERC20.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.19"
+      ],
+      "artifacts": [
+        "MockERC20"
+      ]
+    },
+    "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\MockLPToken.sol": {
+      "lastModificationDate": 1740604122178,
+      "contentHash": "ccce8404315ff540eaccbae091577f8c",
+      "sourceName": "packages/hardhat/contracts/MockLPToken.sol",
+      "solcConfig": {
+        "version": "0.8.19",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC20/ERC20.sol",
+        "@openzeppelin/contracts/access/Ownable.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.19"
+      ],
+      "artifacts": [
+        "MockLPToken"
       ]
     }
   }

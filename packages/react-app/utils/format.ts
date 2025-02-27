@@ -5,10 +5,37 @@ import { ethers } from 'ethers';
  * @param address The Ethereum address to format
  * @returns The formatted address (e.g., "0x1234...5678")
  */
-export const formatAddress = (address: string): string => {
+export const formatAddress = (address: any): string => {
   if (!address) return '';
-  if (address.length < 10) return address;
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  
+  // Handle case where address is an object
+  let addressStr: string;
+  if (typeof address === 'object' && address !== null) {
+    // Try to extract address from object
+    if (address.toString && typeof address.toString === 'function') {
+      addressStr = address.toString();
+      // Check if the result looks like an address
+      if (!addressStr.startsWith('0x')) {
+        // Try to get address property if toString didn't return an address
+        if ('address' in address) {
+          addressStr = address.address;
+        } else {
+          console.error('Unable to extract address from object:', address);
+          return 'Invalid Address';
+        }
+      }
+    } else if ('address' in address) {
+      addressStr = address.address;
+    } else {
+      console.error('Unable to extract address from object:', address);
+      return 'Invalid Address';
+    }
+  } else {
+    addressStr = String(address);
+  }
+  
+  if (addressStr.length < 10) return addressStr;
+  return `${addressStr.slice(0, 6)}...${addressStr.slice(-4)}`;
 };
 
 /**
