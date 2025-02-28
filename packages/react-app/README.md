@@ -1,38 +1,166 @@
-# React Framework + NextJS | Celo Composer
+# NoLossBet - Decentralized Betting Platform on Celo
 
-Celo Composer support React boilerplate template with TailwindCSS. This is a starter kit with no additional boilerplate code. It's a perfect starter kit to get your project started on Celo blockchain.
+NoLossBet is a decentralized betting platform built on the Celo blockchain that allows users to create and participate in bets without losing their principal stake. The platform uses yield farming strategies to generate returns on staked tokens, creating a risk-free betting experience where users can only win.
 
-## Setup & Installation
+## Features
 
-```bash
-yarn
-```
+### Smart Contract Features
 
-Run `yarn` or `npm install` to install all the required dependencies to run the dApp.
+- **No-Loss Betting**: Users' principal stakes are preserved through yield farming
+- **Customizable Stakes**: Create bets with custom stake amounts (minimum 100 CELO for creators)
+- **Flexible Joining**: Join bets with custom stake amounts (minimum 10 CELO for opponents)
+- **Comment System**: Add comments when joining bets to express your thoughts
+- **Yield Distribution**: Winners receive a larger portion of the yield generated
+- **NFT Representation**: Each bet is represented as an NFT that transfers to the opponent when accepted
+- **Dispute Resolution**: Built-in mechanism for resolving disputed outcomes
+- **Reward Tokens**: BetM3 tokens are distributed as additional rewards to participants
 
-> React + Tailwind CSS Template does not have any dependency on hardhat and truffle.
-> This starterkit does not include connection of Hardhat/Truffle with ReactJS. It's up to the user to integrate smart contract with ReactJS. This gives user more flexibily over the dApp.
+### Frontend Features
 
--   To start the dApp, run the following command.
-
-```bash
-yarn react-dev
-```
-
-## Dependencies
-
-### Default
-
--   [Next.js](https://nextjs.org/) app framework
--   [TailwindCSS](https://tailwindcss.com/) for UI
--   [rainbowkit-celo](https://www.npmjs.com/package/@celo/rainbowkit-celo), a plugin to help rainbowkit developers support the CELO protocol faster.
+- **Modern UI**: Clean, responsive interface built with React
+- **Wallet Integration**: Seamless connection with MetaMask and other Ethereum wallets
+- **Bet Creation**: Intuitive form for creating new bets
+- **Bet Discovery**: Browse and filter active bets
+- **Bet Management**: Track and manage your active and past bets
+- **Yield Visualization**: See potential and actual yields on your bets
 
 ## Architecture
 
--   `/pages` includes the main application components (specifically `index.tsx` and `_app.tsx`)
-    -   `_app.tsx` includes configuration
-    -   `index.tsx` is the main page of the application
--   `/components` includes components that are rendered in `index.tsx`
--   `/public` includes static files
-# BetM3
-# BetM3
+The project consists of several key components:
+
+### Smart Contracts
+
+1. **NoLossBet.sol**: The main contract that handles bet creation, acceptance, and resolution
+2. **MockCELO.sol**: A mock CELO token for testing purposes
+3. **cUSDToken.sol**: A mock cUSD stablecoin for testing purposes
+4. **LPToken.sol**: Represents liquidity pool tokens
+5. **UniswapPoolMock.sol**: Simulates Uniswap liquidity pool for yield generation
+6. **BetM3Token.sol**: Reward token distributed to bet participants
+
+### Frontend
+
+- React application with Tailwind CSS for styling
+- ethers.js for blockchain interaction
+- Context API for state management
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v14+)
+- npm or yarn
+- MetaMask or another Ethereum wallet
+
+### Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/bet-m-3.git
+   cd bet-m-3
+   ```
+
+2. Install dependencies:
+   ```
+   # Install Hardhat dependencies
+   cd packages/hardhat
+   npm install
+
+   # Install React app dependencies
+   cd ../react-app
+   npm install
+   ```
+
+### Local Development
+
+1. Start a local Hardhat node:
+   ```
+   cd packages/hardhat
+   npx hardhat node
+   ```
+
+2. Deploy the contracts to the local network:
+   ```
+   # In a new terminal
+   cd packages/hardhat
+   npx hardhat run scripts/deploy-localhost.ts --network localhost
+   ```
+
+3. Start the React app:
+   ```
+   cd packages/react-app
+   npm run dev
+   ```
+
+4. Connect MetaMask to the local Hardhat network:
+   - Network Name: Hardhat
+   - RPC URL: http://127.0.0.1:8545
+   - Chain ID: 31337
+   - Currency Symbol: ETH
+
+## Bet Flow
+
+### Creating a Bet
+
+1. Connect your wallet
+2. Navigate to the "Create Bet" page
+3. Enter your stake amount (minimum 100 CELO)
+4. Specify the opponent's stake amount
+5. Describe the bet condition
+6. Select your prediction (Yes/No)
+7. Submit the transaction
+
+### Joining a Bet
+
+1. Browse available bets
+2. Click "Join" on a bet you're interested in
+3. View the bet details, including the bet ID
+4. Enter your stake amount (minimum 10 CELO, or the amount specified by the creator)
+5. Select your prediction (Yes/No)
+6. Optionally add a comment
+7. Confirm and submit the transaction
+
+### Resolving a Bet
+
+1. Once the outcome is known, both parties submit the outcome
+2. If both agree, the bet is automatically resolved
+3. If there's a disagreement, the dispute resolution mechanism is triggered
+4. Upon resolution, stakes are returned to both parties along with yield distribution
+
+## Deployment
+
+The project includes an automated deployment script that:
+
+1. Deploys all necessary contracts
+2. Mints initial tokens for testing
+3. Updates deployment information in all relevant locations
+4. Ensures consistent contract addresses across the application
+
+To deploy to a new network:
+
+```
+cd packages/hardhat
+npx hardhat run scripts/deploy-localhost.ts --network <network-name>
+```
+
+## Testing
+
+Run the test suite to verify contract functionality:
+
+```
+cd packages/hardhat
+npx hardhat test
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgements
+
+- Celo Foundation for blockchain infrastructure
+- OpenZeppelin for secure contract libraries
+- Uniswap for liquidity pool inspiration

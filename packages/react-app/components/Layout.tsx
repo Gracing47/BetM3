@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from './Header';
 import Footer from './Footer';
 import ContractAddressManager from './ContractAddressManager';
-import { useWeb3 } from '../contexts/useWeb3';
+import { useWeb3 } from '../contexts/web3Context';
 
 interface LayoutProps {
   children: React.ReactNode;

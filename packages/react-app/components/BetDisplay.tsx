@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatTokenAmount, formatAddress } from '../utils/format';
 import { ethers } from 'ethers';
-import { useWeb3 } from '../contexts/useWeb3';
+import { useWeb3 } from '../contexts/web3Context';
 
 interface BetDisplayProps {
   bet: {

@@ -1,0 +1,560 @@
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { ethers } from 'ethers';
+import { CONTRACT_ADDRESSES } from '../config/contracts';
+
+// Import ABIs using require to avoid TypeScript module resolution issues
+const NoLossBetABI = require('../abis/generated/NoLossBetABI.json');
+const MockCELOABI = require('../abis/generated/MockCELOABI.json');
+const UniswapPoolMockABI = require('../abis/generated/UniswapPoolMockABI.json');
+const BetM3TokenABI = require('../abis/generated/BetM3TokenABI.json');
+const LPTokenABI = require('../abis/generated/LPTokenABI.json');
+
+// Define global Window interface with ethereum
+declare global {
+  interface Window {
+    ethereum?: any & {
+      isMetaMask?: boolean;
+      selectedAddress?: string;
+      on: (event: string, callback: (...args: any[]) => void) => void;
+      removeListener: (event: string, callback: (...args: any[]) => void) => void;
+      request: (args: { method: string; params?: any[] }) => Promise<any>;
+    };
+  }
+}
+
+// Contract addresses
+interface ContractAddresses {
+  noLossBet: string;
+  mockCELO: string;
+  cUSDToken: string;
+  betM3Token: string;
+  uniswapPoolMock: string;
+  lpToken: string;
+}
+
+// Network configuration interface
+interface NetworkConfig {
+  chainId: string;
+  name: string;
+  rpcUrl: string;
+  blockExplorerUrl?: string;
+}
+
+// Load contract addresses from deployment file
+const loadContractAddresses = (): ContractAddresses => {
+  try {
+    // First try to load from the shared location (project root)
+    let deploymentInfo;
+    try {
+      deploymentInfo = require('../../deployment-localhost.json');
+      console.log("Loaded contract addresses from shared deployment file");
+    } catch (e) {
+      // Fallback to local copy for backward compatibility
+      try {
+        deploymentInfo = require('../deployment-localhost.json');
+        console.log("Loaded contract addresses from local deployment file");
+      } catch (localError) {
+        console.error("Failed to load local deployment file:", localError);
+        throw new Error("Could not load deployment files from any location");
+      }
+    }
+
+    if (!deploymentInfo || !deploymentInfo.addresses) {
+      throw new Error("Invalid deployment file format: missing addresses");
+    }
+
+    const addresses: ContractAddresses = {
+      noLossBet: deploymentInfo.addresses.noLossBet,
+      mockCELO: deploymentInfo.addresses.mockCELO || deploymentInfo.addresses.celoToken,
+      cUSDToken: deploymentInfo.addresses.cUSDToken,
+      betM3Token: deploymentInfo.addresses.betM3Token,
+      uniswapPoolMock: deploymentInfo.addresses.uniswapPoolMock,
+      lpToken: deploymentInfo.addresses.lpToken
+    };
+
+    // Validate that all required addresses are present
+    Object.entries(addresses).forEach(([key, value]) => {
+      if (!value) {
+        throw new Error(`Missing required contract address: ${key}`);
+      }
+    });
+
+    console.log("Contract addresses loaded successfully:", addresses);
+    return addresses;
+  } catch (error) {
+    console.error("Error loading contract addresses:", error);
+    throw new Error("Failed to load contract addresses. Please ensure deployment files are correctly generated.");
+  }
+};
+
+// Network configuration
+const NETWORK_CONFIG: Record<string, NetworkConfig> = {
+  hardhat: {
+    chainId: '0x7a69', // 31337 in hex
+    name: 'Hardhat Local Network',
+    rpcUrl: 'http://localhost:8545'
+  },
+  celoTestnet: {
+    chainId: '0xaef3', // 44787 in hex
+    name: 'Celo Alfajores Testnet',
+    rpcUrl: 'https://alfajores-forno.celo-testnet.org',
+    blockExplorerUrl: 'https://alfajores.celoscan.io/'
+  },
+  celoMainnet: {
+    chainId: '0xa4ec', // 42220 in hex
+    name: 'Celo Mainnet',
+    rpcUrl: 'https://forno.celo.org',
+    blockExplorerUrl: 'https://celoscan.io/'
+  }
+};
+
+// Use the imported contract addresses
+const { 
+  noLossBet: NO_LOSS_BET_ADDRESS,
+  mockCELO: MOCK_CELO_ADDRESS
+} = CONTRACT_ADDRESSES;
+
+// Web3 Context Type
+export interface Web3ContextType {
+  // Connection state
+  address: string | null;
+  isConnecting: boolean;
+  networkName: string;
+  
+  // Connection methods
+  connectWallet: () => Promise<void>;
+  disconnect: () => void;
+  switchToHardhat: () => Promise<void>;
+  switchToCeloTestnet: () => Promise<void>;
+  switchToCeloMainnet: () => Promise<void>;
+  
+  // Contract interaction methods
+  getUserAddress: () => Promise<string>;
+  getCELOBalance: () => Promise<string>;
+  getNextBetId: () => Promise<number>;
+  createBet: (
+    description: string,
+    endTime: number,
+    creatorStake: string
+  ) => Promise<ethers.ContractTransaction>;
+  acceptBet: (
+    betId: string, 
+    prediction: boolean, 
+    customStake?: string, 
+    commentText?: string
+  ) => Promise<ethers.ContractTransaction>;
+  getBets: () => Promise<any[]>;
+  
+  // Contract address getters
+  getNoLossBetAddress: () => string;
+  getMockCELOAddress: () => string;
+  getCUSDTokenAddress: () => string;
+  getBetM3TokenAddress: () => string;
+  getUniswapPoolMockAddress: () => string;
+  getLPTokenAddress: () => string;
+}
+
+// Create the Web3 Context
+const Web3Context = createContext<Web3ContextType | null>(null);
+
+// Web3 Provider Component
+export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Check if we're in a browser environment
+  const isBrowser = typeof window !== 'undefined';
+  
+  // Load contract addresses
+  let contractAddresses;
+  try {
+    contractAddresses = loadContractAddresses();
+  } catch (error) {
+    console.error("Error loading contract addresses:", error);
+    // Provide default empty addresses for server-side rendering
+    contractAddresses = {
+      noLossBet: '',
+      mockCELO: '',
+      cUSDToken: '',
+      betM3Token: '',
+      uniswapPoolMock: '',
+      lpToken: ''
+    };
+  }
+  
+  // State
+  const [address, setAddress] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
+  const [networkName, setNetworkName] = useState<string>('');
+  const [provider, setProvider] = useState<ethers.providers.Web3Provider | null>(null);
+  const [signer, setSigner] = useState<ethers.providers.JsonRpcSigner | null>(null);
+  
+  // Initialize provider and check connection
+  useEffect(() => {
+    // Skip initialization on server-side
+    if (!isBrowser) return;
+    
+    const initProvider = async () => {
+      if (window.ethereum) {
+        try {
+          const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+          setProvider(web3Provider);
+          
+          // Check if already connected
+          const accounts = await web3Provider.listAccounts();
+          if (accounts.length > 0) {
+            setAddress(accounts[0]);
+            setSigner(web3Provider.getSigner());
+          }
+          
+          // Get network name
+          const network = await web3Provider.getNetwork();
+          updateNetworkName(network.chainId.toString(16));
+          
+          // Listen for account changes
+          window.ethereum.on('accountsChanged', handleAccountsChanged);
+          window.ethereum.on('chainChanged', handleChainChanged);
+          
+          return () => {
+            window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
+            window.ethereum?.removeListener('chainChanged', handleChainChanged);
+          };
+        } catch (error) {
+          console.error("Failed to initialize provider:", error);
+        }
+      } else {
+        console.warn("No ethereum object found. Please install MetaMask.");
+      }
+    };
+    
+    initProvider();
+  }, [isBrowser]);
+  
+  // Handle account changes
+  const handleAccountsChanged = (accounts: string[]) => {
+    if (accounts.length === 0) {
+      // User disconnected
+      setAddress(null);
+      setSigner(null);
+    } else {
+      // User switched accounts
+      setAddress(accounts[0]);
+      if (provider) {
+        setSigner(provider.getSigner());
+      }
+    }
+  };
+  
+  // Handle chain changes
+  const handleChainChanged = (chainIdHex: string) => {
+    // Reload the page on chain change as recommended by MetaMask
+    window.location.reload();
+  };
+  
+  // Update network name based on chainId
+  const updateNetworkName = (chainIdHex: string) => {
+    if (chainIdHex === NETWORK_CONFIG.hardhat.chainId) {
+      setNetworkName('Hardhat');
+    } else if (chainIdHex === NETWORK_CONFIG.celoTestnet.chainId) {
+      setNetworkName('Celo Testnet');
+    } else if (chainIdHex === NETWORK_CONFIG.celoMainnet.chainId) {
+      setNetworkName('Celo Mainnet');
+    } else {
+      setNetworkName('Unknown Network');
+    }
+  };
+  
+  // Connect wallet
+  const connectWallet = useCallback(async () => {
+    if (!window.ethereum) {
+      alert("Please install MetaMask to use this application.");
+      return;
+    }
+    
+    setIsConnecting(true);
+    try {
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+      
+      if (accounts.length > 0) {
+        setAddress(accounts[0]);
+        if (provider) {
+          setSigner(provider.getSigner());
+        }
+      }
+    } catch (error) {
+      console.error("Failed to connect wallet:", error);
+      alert("Failed to connect wallet. Please try again.");
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [provider]);
+  
+  // Disconnect wallet (for UI purposes only)
+  const disconnect = useCallback(() => {
+    setAddress(null);
+    setSigner(null);
+  }, []);
+  
+  // Switch network functions
+  const switchNetwork = async (networkConfig: NetworkConfig) => {
+    if (!window.ethereum) return;
+    
+    try {
+      // Try to switch to the network
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: networkConfig.chainId }]
+      });
+    } catch (error: any) {
+      // If the network is not added to MetaMask, add it
+      if (error.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: networkConfig.chainId,
+              chainName: networkConfig.name,
+              rpcUrls: [networkConfig.rpcUrl],
+              nativeCurrency: {
+                name: 'CELO',
+                symbol: 'CELO',
+                decimals: 18
+              },
+              blockExplorerUrls: networkConfig.blockExplorerUrl ? [networkConfig.blockExplorerUrl] : undefined
+            }]
+          });
+        } catch (addError) {
+          console.error("Failed to add network:", addError);
+        }
+      } else {
+        console.error("Failed to switch network:", error);
+      }
+    }
+  };
+  
+  const switchToHardhat = useCallback(async () => {
+    await switchNetwork(NETWORK_CONFIG.hardhat);
+  }, []);
+  
+  const switchToCeloTestnet = useCallback(async () => {
+    await switchNetwork(NETWORK_CONFIG.celoTestnet);
+  }, []);
+  
+  const switchToCeloMainnet = useCallback(async () => {
+    await switchNetwork(NETWORK_CONFIG.celoMainnet);
+  }, []);
+  
+  // Get user address
+  const getUserAddress = useCallback(async (): Promise<string> => {
+    if (address) return address;
+    
+    if (provider) {
+      const accounts = await provider.listAccounts();
+      if (accounts.length > 0) {
+        setAddress(accounts[0]);
+        return accounts[0];
+      }
+    }
+    
+    throw new Error("No connected account found");
+  }, [address, provider]);
+  
+  // Get CELO balance
+  const getCELOBalance = useCallback(async (): Promise<string> => {
+    if (!provider || !address) return "0";
+    
+    try {
+      const balance = await provider.getBalance(address);
+      return ethers.utils.formatEther(balance);
+    } catch (error) {
+      console.error("Failed to get CELO balance:", error);
+      return "0";
+    }
+  }, [provider, address]);
+  
+  // Get NoLossBet contract instance
+  const getNoLossBetContract = useCallback(() => {
+    if (!provider) throw new Error("Provider not initialized");
+    
+    return new ethers.Contract(
+      contractAddresses.noLossBet,
+      NoLossBetABI,
+      signer || provider
+    );
+  }, [provider, signer, contractAddresses.noLossBet]);
+  
+  // Get next bet ID
+  const getNextBetId = useCallback(async (): Promise<number> => {
+    try {
+      const contract = getNoLossBetContract();
+      const nextBetId = await contract.nextBetId();
+      return Number(nextBetId);
+    } catch (error) {
+      console.error("Failed to get next bet ID:", error);
+      return 0;
+    }
+  }, [getNoLossBetContract]);
+  
+  // Create a new bet
+  const createBet = useCallback(async (
+    description: string,
+    endTime: number,
+    creatorStake: string
+  ): Promise<ethers.ContractTransaction> => {
+    if (!signer) throw new Error("Wallet not connected");
+    
+    const contract = getNoLossBetContract();
+    const stakeAmount = ethers.utils.parseEther(creatorStake);
+    
+    return await contract.createBet(description, endTime, stakeAmount);
+  }, [signer, getNoLossBetContract]);
+  
+  // Accept a bet
+  const acceptBet = useCallback(async (
+    betId: string, 
+    prediction: boolean, 
+    customStake?: string, 
+    commentText?: string
+  ): Promise<ethers.ContractTransaction> => {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      throw new Error("Cannot accept bet in server-side environment");
+    }
+    
+    if (!signer) throw new Error("Wallet not connected");
+    
+    try {
+      console.log(`Accepting bet ID ${betId} with prediction: ${prediction}`);
+      console.log(`Custom stake: ${customStake || 'default'}, comment: ${commentText || 'none'}`);
+      
+      const contract = getNoLossBetContract();
+      const betIdNumber = parseInt(betId);
+      
+      // Check if the bet exists and is valid
+      try {
+        const betDetails = await contract.bets(betIdNumber);
+        console.log("Bet details:", betDetails);
+        
+        if (betDetails.creator === "0x0000000000000000000000000000000000000000") {
+          throw new Error(`Bet with ID ${betId} does not exist`);
+        }
+        
+        if (betDetails.opponent !== "0x0000000000000000000000000000000000000000") {
+          throw new Error(`Bet with ID ${betId} has already been accepted`);
+        }
+        
+        if (betDetails.resolved) {
+          throw new Error(`Bet with ID ${betId} has already been resolved`);
+        }
+        
+        if (betDetails.expiration < Math.floor(Date.now() / 1000)) {
+          throw new Error(`Bet with ID ${betId} has expired`);
+        }
+      } catch (betError: any) {
+        console.error("Error checking bet details:", betError);
+        throw new Error(`Failed to check bet details: ${betError.message}`);
+      }
+      
+      // Determine which overload of acceptBet to call
+      if (customStake && customStake !== '0') {
+        const customStakeAmount = ethers.BigNumber.from(customStake);
+        if (commentText && commentText.trim() !== "") {
+          console.log(`Calling overloaded acceptBet(uint256,bool,uint256,string) with: ${betIdNumber}, ${prediction}, ${customStakeAmount.toString()}, "${commentText}"`);
+          return await contract["acceptBet(uint256,bool,uint256,string)"](betIdNumber, prediction, customStakeAmount, commentText);
+        } else {
+          console.log(`Calling overloaded acceptBet(uint256,bool,uint256,string) with: ${betIdNumber}, ${prediction}, ${customStakeAmount.toString()}, ""`);
+          return await contract["acceptBet(uint256,bool,uint256,string)"](betIdNumber, prediction, customStakeAmount, "");
+        }
+      } else if (commentText && commentText.trim() !== "") {
+        console.log(`Calling overloaded acceptBet(uint256,bool,uint256,string) with: ${betIdNumber}, ${prediction}, 0, "${commentText}"`);
+        return await contract["acceptBet(uint256,bool,uint256,string)"](betIdNumber, prediction, 0, commentText);
+      } else {
+        console.log(`Calling acceptBet(uint256,bool) with: ${betIdNumber}, ${prediction}`);
+        return await contract["acceptBet(uint256,bool)"](betIdNumber, prediction);
+      }
+    } catch (error) {
+      console.error("Error accepting bet:", error);
+      throw new Error(`Failed to accept bet: ${error.message}`);
+    }
+  }, [signer, getNoLossBetContract]);
+  
+  // Bet interface for type safety
+  interface Bet {
+    id: number;
+    [key: string]: any; // Allow any additional properties from the contract
+  }
+
+  // Get all bets
+  const getBets = useCallback(async (): Promise<Bet[]> => {
+    try {
+      const contract = getNoLossBetContract();
+      const nextBetId = await contract.nextBetId();
+      const bets: Bet[] = [];
+      
+      for (let i = 0; i < Number(nextBetId); i++) {
+        try {
+          const bet = await contract.bets(i);
+          bets.push({
+            id: i,
+            ...Object.fromEntries(
+              Object.entries(bet).filter(([key]) => isNaN(Number(key)))
+            )
+          });
+        } catch (error) {
+          console.error(`Failed to fetch bet ${i}:`, error);
+        }
+      }
+      
+      return bets;
+    } catch (error) {
+      console.error("Failed to get bets:", error);
+      return [];
+    }
+  }, [getNoLossBetContract]);
+  
+  // Contract address getters
+  const getNoLossBetAddress = useCallback(() => contractAddresses.noLossBet, [contractAddresses]);
+  const getMockCELOAddress = useCallback(() => contractAddresses.mockCELO, [contractAddresses]);
+  const getCUSDTokenAddress = useCallback(() => contractAddresses.cUSDToken, [contractAddresses]);
+  const getBetM3TokenAddress = useCallback(() => contractAddresses.betM3Token, [contractAddresses]);
+  const getUniswapPoolMockAddress = useCallback(() => contractAddresses.uniswapPoolMock, [contractAddresses]);
+  const getLPTokenAddress = useCallback(() => contractAddresses.lpToken, [contractAddresses]);
+  
+  // Provide the context value
+  const contextValue: Web3ContextType = {
+    address,
+    isConnecting,
+    networkName,
+    connectWallet,
+    disconnect,
+    switchToHardhat,
+    switchToCeloTestnet,
+    switchToCeloMainnet,
+    getUserAddress,
+    getCELOBalance,
+    getNextBetId,
+    createBet,
+    acceptBet,
+    getBets,
+    getNoLossBetAddress,
+    getMockCELOAddress,
+    getCUSDTokenAddress,
+    getBetM3TokenAddress,
+    getUniswapPoolMockAddress,
+    getLPTokenAddress
+  };
+  
+  return (
+    <Web3Context.Provider value={contextValue}>
+      {children}
+    </Web3Context.Provider>
+  );
+};
+
+// Custom hook to use the Web3 context
+export const useWeb3 = () => {
+  const context = useContext(Web3Context);
+  if (context === null) {
+    throw new Error('useWeb3 must be used within a Web3Provider');
+  }
+  return context;
+}; 
