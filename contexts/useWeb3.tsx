@@ -133,8 +133,7 @@ export interface Web3ContextType {
   acceptBet: (
     betId: string, 
     prediction: boolean, 
-    customStake?: string, 
-    commentText?: string
+    customStake?: string
   ) => Promise<ethers.ContractTransaction>;
   getBets: () => Promise<any[]>;
   
@@ -470,60 +469,241 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     return await contract.createBet(description, endTime, stakeAmount);
   }, [signer, getNoLossBetContract]);
   
+  // Approve tokens
+  const approveToken = useCallback(async (amount: string): Promise<any> => {
+    try {
+      const { mockCELO } = await getContracts();
+      if (!mockCELO) throw new Error("MockCELO contract not initialized");
+      
+      // Ensure we have a valid target address
+      const targetAddress = NO_LOSS_BET_ADDRESS;
+      
+      console.log(`Approving ${amount} tokens for ${targetAddress}`);
+      const amountWei = ethers.parseEther(amount);
+      
+      // First try to reset approval to 0 to avoid some token approval issues
+      const resetTx = await mockCELO.approve(targetAddress, 0, {
+        gasLimit: 100000
+      });
+      await resetTx.wait();
+      console.log("Reset approval to 0 confirmed");
+      
+      // Now approve the requested amount
+      const tx = await mockCELO.approve(targetAddress, amountWei, {
+        gasLimit: 200000
+      });
+      await tx.wait();
+      console.log(`Approval transaction confirmed for ${amount} tokens`);
+      
+      // Verify the approval was successful
+      if (address) {
+        const newAllowance = await mockCELO.allowance(address, targetAddress);
+        console.log(`Verified allowance: ${ethers.formatEther(newAllowance)}`);
+        
+        // If allowance is still insufficient, try direct approval with the exact amount in wei
+        if (newAllowance < amountWei) {
+          console.log("Allowance verification failed. Trying direct approval with exact amount in wei...");
+          const exactTx = await mockCELO.approve(targetAddress, amountWei.toString(), {
+            gasLimit: 300000
+          });
+          await exactTx.wait();
+          console.log("Direct approval confirmed");
+          
+          const finalAllowance = await mockCELO.allowance(address, targetAddress);
+          console.log(`Final allowance: ${ethers.formatEther(finalAllowance)}`);
+          
+          if (finalAllowance < amountWei) {
+            throw new Error(`Cannot set sufficient allowance: got ${finalAllowance}, needed ${amountWei}`);
+          }
+        }
+      }
+      
+      return tx;
+    } catch (err) {
+      console.error('Error approving tokens:', err);
+      throw err;
+    }
+  }, [getContracts, address]);
+  
   // Accept a bet
   const acceptBet = useCallback(async (
     betId: string, 
     prediction: boolean, 
-    customStake?: string, 
-    commentText?: string
-  ): Promise<ethers.ContractTransaction> => {
-    // Check if we're in a browser environment
+    customStake?: string
+  ): Promise<any> => {
     if (typeof window === 'undefined') {
       throw new Error("Cannot accept bet in server-side environment");
     }
-    
+
     if (!signer) throw new Error("Wallet not connected");
-    
+    if (!address) throw new Error("Wallet address is not available");
+
+    console.log(`Attempting to accept bet: betId=${betId}, prediction=${prediction}, customStake=${customStake || 'default'}`);
+
     try {
-      console.log(`Accepting bet ID ${betId} with prediction: ${prediction}`);
-      console.log(`Custom stake: ${customStake || 'default'}, comment: ${commentText || 'none'}`);
+      const noLossBetAddress = getNoLossBetAddress();
       
-      const contract = getNoLossBetContract();
+      // Get contract instances
+      const contracts = await getContracts();
+      if (!contracts.mockCELO) throw new Error("MockCELO contract not initialized");
+      
+      const targetAddress = NO_LOSS_BET_ADDRESS;
+      console.log("Target address for contract:", targetAddress);
+      
+      // Create ethers provider with debugging options
+      const provider = new ethers.BrowserProvider(window.ethereum, undefined, {
+        batchStallTime: 0 // Reduce wait time for logs
+      });
+      
+      // Try to get a wallet with debugging enabled
+      const debugSigner = await provider.getSigner();
+      
+      // Create a more detailed contract instance
+      const contract = new ethers.Contract(
+        targetAddress,
+        NoLossBetABI,
+        debugSigner
+      );
+      
       const betIdNumber = parseInt(betId);
+
+      // Attempt with lower stakes to rule out token amount issues
+      const lowerStake = "1"; // Try with just 1 token
+      const stakeAmountWei = ethers.parseEther(lowerStake);
       
-      // Check if the bet exists and is valid
-      try {
-        const betDetails = await contract.bets(betIdNumber);
-        console.log("Bet details:", betDetails);
-        
-        if (betDetails.creator === "0x0000000000000000000000000000000000000000") {
-          throw new Error(`Bet with ID ${betId} does not exist`);
-        }
-        
-        if (betDetails.opponent !== "0x0000000000000000000000000000000000000000") {
-          throw new Error(`Bet with ID ${betId} has already been accepted`);
-        }
-        
-        if (betDetails.resolved) {
-          throw new Error(`Bet with ID ${betId} has already been resolved`);
-        }
-        
-        if (betDetails.expiration < Math.floor(Date.now() / 1000)) {
-          throw new Error(`Bet with ID ${betId} has expired`);
-        }
-      } catch (betError: any) {
-        console.error("Error checking bet details:", betError);
-        throw new Error(`Failed to check bet details: ${betError.message}`);
+      console.log(`Using minimal stake amount for debugging: ${lowerStake} (${stakeAmountWei.toString()})`);
+      
+      // Ensure allowance is sufficient
+      const currentAllowance = await contracts.mockCELO.allowance(address, targetAddress);
+      console.log(`Current allowance: ${ethers.formatEther(currentAllowance)}`);
+      
+      if (currentAllowance < stakeAmountWei) {
+        const approveTx = await contracts.mockCELO.approve(targetAddress, stakeAmountWei, {
+          gasLimit: 200000
+        });
+        console.log(`Waiting for approval transaction: ${approveTx.hash}`);
+        await approveTx.wait();
+        console.log("Approval confirmed");
       }
       
-      // Simple approach: always use the 2-parameter version
-      console.log(`Calling simple acceptBet with: ${betIdNumber}, ${prediction}`);
-      return await contract.acceptBet(betIdNumber, prediction);
+      // Try a minimal gas estimation approach first
+      try {
+        console.log("Estimating gas for the transaction...");
+        const gasEstimate = await contract.acceptBet.estimateGas(
+          betIdNumber, 
+          prediction, 
+          stakeAmountWei,
+          { from: address }
+        );
+        
+        console.log(`Gas estimate: ${gasEstimate.toString()}`);
+        
+        // Add 50% buffer to the estimate
+        const gasLimit = gasEstimate.mul(150).div(100);
+        console.log(`Using gas limit with buffer: ${gasLimit.toString()}`);
+        
+        // Try the transaction with the calculated gas limit
+        console.log(`Calling acceptBet with betId=${betIdNumber}, prediction=${prediction}, stake=${stakeAmountWei.toString()}`);
+        const tx = await contract.acceptBet(betIdNumber, prediction, stakeAmountWei, {
+          gasLimit
+        });
+        
+        console.log(`Transaction submitted: ${tx.hash}`);
+        const receipt = await tx.wait();
+        console.log(`Bet accepted in block ${receipt.blockNumber}`);
+        return tx;
+      } catch (estimateError) {
+        console.error("Gas estimation failed, this is important debugging information:", estimateError);
+        
+        // If gas estimation fails, let's try different parameter combinations
+        try {
+          console.log("Trying alternative parameter settings...");
+          
+          // Attempt 1: Try with a zero stake amount
+          console.log("Attempt 1: Using zero stake amount");
+          const tx1 = await contract.acceptBet(betIdNumber, prediction, 0, {
+            gasLimit: 2000000
+          });
+          
+          console.log(`Transaction submitted: ${tx1.hash}`);
+          const receipt1 = await tx1.wait();
+          console.log(`Bet accepted in block ${receipt1.blockNumber}`);
+          return tx1;
+        } catch (error1) {
+          console.error("Attempt 1 failed:", error1);
+          
+          // Attempt 2: Try with different parameter order
+          try {
+            console.log("Attempt 2: Using different parameter arrangement");
+            // Create calldata directly
+            const ABI = ["function acceptBet(uint256 betId, bool prediction, uint256 customStake)"];
+            const iface = new ethers.Interface(ABI);
+            const calldata = iface.encodeFunctionData("acceptBet", [
+              betIdNumber, prediction, stakeAmountWei
+            ]);
+            
+            // Send a raw transaction
+            const tx2 = await debugSigner.sendTransaction({
+              to: targetAddress,
+              data: calldata,
+              gasLimit: 3000000
+            });
+            
+            console.log(`Transaction submitted: ${tx2.hash}`);
+            const receipt2 = await tx2.wait();
+            console.log(`Bet accepted in block ${receipt2.blockNumber}`);
+            return tx2;
+          } catch (error2) {
+            console.error("Attempt 2 failed:", error2);
+            
+            // Attempt 3: Try a completely different approach - call without the customStake parameter
+            try {
+              console.log("Attempt 3: Simplest possible call");
+              // Create specialized interface
+              const SimplifiedABI = ["function acceptBet(uint256 betId, bool prediction)"];
+              const simplifiedInterface = new ethers.Interface(SimplifiedABI);
+              const simpleCalldata = simplifiedInterface.encodeFunctionData("acceptBet", [
+                betIdNumber, prediction
+              ]);
+              
+              const tx3 = await debugSigner.sendTransaction({
+                to: targetAddress,
+                data: simpleCalldata,
+                gasLimit: 5000000
+              });
+              
+              console.log(`Transaction submitted: ${tx3.hash}`);
+              const receipt3 = await tx3.wait();
+              console.log(`Bet accepted in block ${receipt3.blockNumber}`);
+              return tx3;
+            } catch (error3) {
+              console.error("All attempts failed. Contract might have fundamental issues:", error3);
+              
+              // Log very detailed debugging information
+              console.log("Contract address:", targetAddress);
+              console.log("Sender address:", address);
+              console.log("BetId:", betIdNumber);
+              console.log("Prediction:", prediction);
+              console.log("Stake amount:", ethers.formatEther(stakeAmountWei));
+              
+              // Retrieve additional contract information if possible
+              try {
+                const owner = await contract.owner();
+                console.log("Contract owner:", owner);
+              } catch (e) {
+                console.log("Could not retrieve contract owner");
+              }
+              
+              throw new Error("Contract interaction failed after multiple attempts. The smart contract might have logic issues or be incompatible with current parameters.");
+            }
+          }
+        }
+      }
     } catch (error: any) {
       console.error("Error accepting bet:", error);
       throw new Error(`Failed to accept bet: ${error.message}`);
     }
-  }, [getNoLossBetContract]);
+  }, [getNoLossBetAddress, getContracts, signer, address]);
   
   // Bet interface for type safety
   interface Bet {

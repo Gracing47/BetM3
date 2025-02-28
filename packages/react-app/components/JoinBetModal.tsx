@@ -18,7 +18,7 @@ interface JoinBetModalProps {
     status: 'Created' | 'Active' | 'Completed' | 'Cancelled';
   };
   onClose: () => void;
-  onJoin: (prediction: boolean) => Promise<void>;
+  onJoin: (prediction: boolean, stake?: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -30,7 +30,7 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
   const [mintSuccess, setMintSuccess] = useState(false);
   const [customStake, setCustomStake] = useState<string>("");
   const [stakeOption, setStakeOption] = useState<'default' | '10' | '100' | 'custom'>('default');
-  const [commentText, setCommentText] = useState<string>("");
+  const [isJoining, setIsJoining] = useState<boolean>(false);
 
   // Berechne den tatsächlichen Einsatz basierend auf der ausgewählten Option
   const getStakeAmount = () => {
@@ -48,17 +48,63 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
 
   const handleJoinBet = async () => {
     if (selectedPrediction === null) {
-      setError("Please select Yes or No for your prediction");
+      setError("Please select a prediction (Yes or No)");
       return;
     }
-
+    
+    setError(null);
+    setIsJoining(true);
+    
     try {
-      // Only pass the selected prediction to the onJoin function
-      // Removing customStake and commentText for now to simplify
-      await onJoin(selectedPrediction);
+      // Get stake amount based on selection
+      let finalStake;
+      if (stakeOption === 'custom' && customStake) {
+        finalStake = customStake;
+      } else if (stakeOption === '10') {
+        finalStake = '10';
+      } else if (stakeOption === '100') {
+        finalStake = '100';
+      }
+      
+      console.log("Joining bet with:", {
+        prediction: selectedPrediction,
+        stake: finalStake || "default"
+      });
+      
+      // Call onJoin with only prediction and stake
+      await onJoin(selectedPrediction, finalStake);
     } catch (err: any) {
       console.error("Error joining bet:", err);
-      setError(err.message || "Failed to join bet. Please try again.");
+      
+      // Format error message for display
+      let errorMessage = err.message || "Failed to join bet. Please try again.";
+      
+      // Check for specific error conditions
+      if (errorMessage.includes("Insufficient CELO")) {
+        errorMessage = "You don't have enough CELO tokens to join this bet. Would you like to mint some?";
+      } else if (errorMessage.includes("User rejected")) {
+        errorMessage = "Transaction was cancelled.";
+      } else if (errorMessage.includes("Internal JSON-RPC error") || errorMessage.includes("ambiguous function description")) {
+        // Show more helpful message for contract errors
+        errorMessage = "There was an issue with your bet transaction. This might be due to:";
+        errorMessage += "\n- Insufficient token approval";
+        errorMessage += "\n- The bet may already be accepted";
+        errorMessage += "\n- The bet may have expired";
+        errorMessage += "\n- You might be the creator of this bet";
+        errorMessage += "\n\nPlease check your token balance and try again.";
+      } else if (errorMessage.includes("Bet already accepted")) {
+        errorMessage = "This bet has already been accepted by another user.";
+      } else if (errorMessage.includes("Creator cannot accept own bet")) {
+        errorMessage = "You cannot accept your own bet.";
+      } else if (errorMessage.includes("Bet has expired")) {
+        errorMessage = "This bet has expired and can no longer be accepted.";
+      } else if (errorMessage.includes("Stake transfer failed")) {
+        errorMessage = "Failed to transfer CELO tokens. Please ensure you have approved enough tokens.";
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsJoining(false);
     }
   };
 
@@ -129,6 +175,12 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
           </div>
         </div>
         
+        {/* Updated message about the bet flow */}
+        <div className="bg-blue-50 text-blue-700 p-3 rounded-md mb-4 text-sm">
+          <strong>Vereinfachte Wettannahme:</strong> Wähle deine Vorhersage und setze deinen Einsatz.
+          Der Mindesteinsatz beträgt 10 CELO.
+        </div>
+        
         {/* Stake Selection */}
         <div className="mb-6">
           <p className="text-sm font-medium mb-2">Your Stake:</p>
@@ -185,24 +237,8 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
                 if (e.target.value) setStakeOption('custom');
               }}
               className="flex-1 border border-gray-300 rounded-md p-2 text-sm"
-              disabled={stakeOption !== 'custom'}
             />
           </div>
-        </div>
-        
-        {/* Comment Field */}
-        <div className="mb-6">
-          <p className="text-sm font-medium mb-2">Add a comment (optional):</p>
-          <textarea
-            placeholder="Share your thoughts on this bet..."
-            value={commentText}
-            onChange={(e) => setCommentText(e.target.value)}
-            className="w-full border border-gray-300 rounded-md p-2 text-sm min-h-[80px]"
-            maxLength={200}
-          />
-          <p className="text-xs text-gray-500 text-right mt-1">
-            {commentText.length}/200 characters
-          </p>
         </div>
         
         <div className="mb-6">
@@ -263,10 +299,10 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
           </button>
           <button
             onClick={handleJoinBet}
-            disabled={selectedPrediction === null || isLoading}
+            disabled={selectedPrediction === null || isJoining}
             className="flex-1 py-2 px-4 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-gray-300"
           >
-            {isLoading ? (
+            {isJoining ? (
               <div className="flex items-center justify-center">
                 <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mr-2"></div>
                 <span>Joining...</span>

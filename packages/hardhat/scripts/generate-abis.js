@@ -17,8 +17,7 @@ const contracts = [
   'BetM3Token.sol/BetM3Token.json',
   'UniswapPoolMock.sol/UniswapPoolMock.json',
   'cUSDToken.sol/cUSDToken.json',
-  'LPToken.sol/LPToken.json',
-  'AavePoolMock.sol/AavePoolMock.json'
+  'LPToken.sol/LPToken.json'
 ];
 
 // Generate index.ts file content

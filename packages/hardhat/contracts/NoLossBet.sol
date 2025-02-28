@@ -1,100 +1,87 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+// Importing required OpenZeppelin contracts for functionality
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; // For CELO token interaction
+import "@openzeppelin/contracts/access/Ownable.sol"; // For ownership and restricted functions
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol"; // To prevent reentrancy attacks
 
-// Uniswap-Schnittstelle für Liquiditätsmanagement
-interface IUniswapV2Router {
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint amountADesired,
-        uint amountBDesired,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB, uint liquidity);
-
-    function removeLiquidity(
-        address tokenA,
-        address tokenB,
-        uint liquidity,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB);
-}
-
-contract NoLossBet is ERC721, Ownable, ReentrancyGuard {
-    // Struktur für eine Wette
+/**
+ * @title NoLossBet
+ * @dev A simplified betting platform where users can create and accept bets using CELO tokens
+ * The contract simulates yield generation at a fixed 5% rate for the MVP
+ * Both parties get their original stake back, and the winner gets most of the yield
+ */
+contract NoLossBet is Ownable, ReentrancyGuard {
+    // Struct to store all details of a bet
     struct Bet {
-        address creator;           // Ersteller der Wette
-        address opponent;          // Gegner der Wette
-        uint256 creatorStake;      // Einsatz des Erstellers
-        uint256 opponentStake;     // Einsatz des Gegners
-        string condition;          // Bedingung der Wette
-        bool creatorOutcome;       // Ergebnis des Erstellers
-        bool opponentOutcome;      // Ergebnis des Gegners
-        bool resolved;             // Ob die Wette abgeschlossen ist
-        uint256 expiration;        // Ablaufzeit der Wette
-        string commentText;        // Kommentar des Gegners
+        address creator;           // The address of the person who created the bet
+        address opponent;          // The address of the person who accepts the bet (initially zero)
+        uint256 creatorStake;      // Amount of CELO staked by the creator
+        uint256 opponentStake;     // Amount of CELO staked by the opponent
+        string condition;          // A string describing the bet's condition (e.g., "Team A wins")
+        bool creatorOutcome;       // The creator's submitted outcome (true = win, false = lose)
+        bool opponentOutcome;      // The opponent's submitted outcome (true = win, false = lose)
+        bool resolved;             // Tracks if the bet has been resolved
+        uint256 expiration;        // Unix timestamp when the bet expires
     }
 
-    // Mappings für Wetten, Token-URIs und Liquidität
+    // Mapping to store bets
     mapping(uint256 => Bet) public bets;
-    mapping(uint256 => string) public tokenURIs;
-    mapping(uint256 => uint256) public betLiquidity;
 
-    // Token und Router
-    IERC20 public celoToken;       // CELO-Token
-    IERC20 public stableToken;     // Stablecoin-Token
-    IERC20 public betM3Token;      // Belohnungs-Token
-    IERC20 public lpToken;         // Liquiditätspool-Token
-    IUniswapV2Router public uniswapRouter;
+    // Token interface for CELO
+    IERC20 public celoToken;
 
-    // Zähler und Konstanten
+    // Counter for bet IDs
     uint256 public betCounter;
-    uint256 public constant BET_DURATION = 14 days;
 
-    // Events für wichtige Aktionen
-    event BetCreated(uint256 betId, address creator, uint256 creatorStake, uint256 opponentStake, string condition);
-    event BetAccepted(uint256 betId, address opponent, bool prediction, uint256 customStake, string commentText);
-    event OutcomeSubmitted(uint256 betId, bool success);
-    event BetResolved(uint256 betId, uint256 totalYield);
-    event DisputeResolved(uint256 betId, address winner);
+    // Default bet duration (can be overridden when creating a bet)
+    uint256 public constant DEFAULT_BET_DURATION = 7 days;
+    
+    // Minimum stake amounts
+    uint256 public constant MIN_CREATOR_STAKE = 10 * 10**18;  // 10 CELO
+    uint256 public constant MIN_OPPONENT_STAKE = 10 * 10**18; // 10 CELO
 
-    // Konstruktor
-    constructor(
-        address _celoToken,
-        address _stableToken,
-        address _betM3Token,
-        address _lpToken,
-        address _uniswapRouter
-    ) ERC721("NoLossBet", "NLB") {
-        _transferOwnership(msg.sender);
+    // Events to log important actions on the blockchain
+    event BetCreated(uint256 indexed betId, address indexed creator, uint256 creatorStake, uint256 opponentStake, string condition, uint256 expiration);
+    event BetAccepted(uint256 indexed betId, address indexed opponent, bool prediction, uint256 customStake);
+    event OutcomeSubmitted(uint256 indexed betId, address indexed submitter, bool outcome);
+    event BetResolved(uint256 indexed betId, address indexed winner, uint256 simulatedYield);
+    event BetCancelled(uint256 indexed betId);
+
+    /**
+     * @dev Constructor sets the CELO token address
+     * @param _celoToken Address of the CELO token contract
+     */
+    constructor(address _celoToken) {
         celoToken = IERC20(_celoToken);
-        stableToken = IERC20(_stableToken);
-        betM3Token = IERC20(_betM3Token);
-        lpToken = IERC20(_lpToken);
-        uniswapRouter = IUniswapV2Router(_uniswapRouter);
     }
 
-    // Funktion zum Erstellen einer Wette
-    function createBet(uint256 _creatorStake, uint256 _opponentStake, string calldata _condition, string calldata _tokenURI) external {
-        require(_creatorStake >= 100 * 10 ** 18, "Creator stake must be at least 100 CELO");
+    /**
+     * @dev Creates a new bet
+     * @param _creatorStake Amount of CELO the creator is staking
+     * @param _opponentStake Suggested amount for the opponent to stake
+     * @param _condition Description of the bet condition
+     * @param _durationDays Number of days until the bet expires (0 for default)
+     */
+    function createBet(
+        uint256 _creatorStake,
+        uint256 _opponentStake,
+        string calldata _condition,
+        uint256 _durationDays
+    ) external {
+        require(_creatorStake >= MIN_CREATOR_STAKE, "Creator stake too low");
+        require(_opponentStake >= MIN_OPPONENT_STAKE, "Opponent stake too low");
+        
+        // Transfer CELO from creator to contract
         require(celoToken.transferFrom(msg.sender, address(this), _creatorStake), "Stake transfer failed");
 
+        // Calculate expiration time
+        uint256 duration = _durationDays > 0 ? _durationDays * 1 days : DEFAULT_BET_DURATION;
+        uint256 expirationTime = block.timestamp + duration;
+
+        // Create new bet
         uint256 betId = betCounter++;
-        _mint(msg.sender, betId);
-        tokenURIs[betId] = _tokenURI;
-
-        uint256 expirationTime = block.timestamp + BET_DURATION;
-
         bets[betId] = Bet({
             creator: msg.sender,
             opponent: address(0),
@@ -104,264 +91,215 @@ contract NoLossBet is ERC721, Ownable, ReentrancyGuard {
             creatorOutcome: false,
             opponentOutcome: false,
             resolved: false,
-            expiration: expirationTime,
-            commentText: ""
+            expiration: expirationTime
         });
 
-        emit BetCreated(betId, msg.sender, _creatorStake, _opponentStake, _condition);
+        emit BetCreated(betId, msg.sender, _creatorStake, _opponentStake, _condition, expirationTime);
     }
 
-    // Überladene Funktionen zum Akzeptieren einer Wette
-    function acceptBet(uint256 _betId, bool _prediction) external {
-        _acceptBet(_betId, _prediction, 0, "");
-    }
-
-    function acceptBet(uint256 _betId, bool _prediction, uint256 _customStake, string calldata _commentText) external {
-        _acceptBet(_betId, _prediction, _customStake, _commentText);
-    }
-
-    // Interne Funktion zum Akzeptieren einer Wette
-    function _acceptBet(uint256 _betId, bool _prediction, uint256 _customStake, string memory _commentText) internal {
+    /**
+     * @dev Accepts an existing bet
+     * @param _betId ID of the bet to accept
+     * @param _prediction The opponent's prediction (true/false)
+     * @param _customStake Optional custom stake amount (0 to use default)
+     */
+    function acceptBet(uint256 _betId, bool _prediction, uint256 _customStake) external {
         Bet storage bet = bets[_betId];
+        
+        require(bet.creator != address(0), "Bet does not exist");
         require(bet.opponent == address(0), "Bet already accepted");
         require(msg.sender != bet.creator, "Creator cannot accept own bet");
         require(block.timestamp < bet.expiration, "Bet has expired");
 
+        // Determine stake amount
         uint256 stakeAmount = _customStake > 0 ? _customStake : bet.opponentStake;
-        require(stakeAmount >= 10 * 10 ** 18, "Opponent stake must be at least 10 CELO");
+        require(stakeAmount >= MIN_OPPONENT_STAKE, "Stake too low");
+        
+        // Transfer CELO from opponent to contract
         require(celoToken.transferFrom(msg.sender, address(this), stakeAmount), "Stake transfer failed");
 
+        // Update bet details
         bet.opponent = msg.sender;
         bet.opponentOutcome = _prediction;
-        bet.commentText = _commentText;
-
         if (_customStake > 0) {
             bet.opponentStake = _customStake;
         }
 
-        _transfer(bet.creator, msg.sender, _betId);
-
-        uint256 totalStake = bet.creatorStake + bet.opponentStake;
-        uint256 halfStake = totalStake / 2;
-
-        require(stableToken.transferFrom(owner(), address(this), halfStake), "StableToken transfer failed");
-
-        celoToken.approve(address(uniswapRouter), halfStake);
-        stableToken.approve(address(uniswapRouter), halfStake);
-
-        (,, uint256 liquidity) = uniswapRouter.addLiquidity(
-            address(celoToken),
-            address(stableToken),
-            halfStake,
-            halfStake,
-            halfStake * 95 / 100,
-            halfStake * 95 / 100,
-            address(this),
-            block.timestamp + 15 minutes
-        );
-
-        betLiquidity[_betId] = liquidity;
-
-        emit BetAccepted(_betId, msg.sender, _prediction, stakeAmount, _commentText);
+        emit BetAccepted(_betId, msg.sender, _prediction, stakeAmount);
     }
 
-    // Funktion zum Einreichen des Ergebnisses
-    function submitOutcome(uint256 _betId, bool _success) external {
+    /**
+     * @dev Submits the outcome of a bet
+     * @param _betId ID of the bet
+     * @param _outcome The outcome (true/false)
+     */
+    function submitOutcome(uint256 _betId, bool _outcome) external {
         Bet storage bet = bets[_betId];
-        require(msg.sender == bet.creator || msg.sender == bet.opponent, "Not a participant");
-        require(!bet.resolved, "Bet already resolved");
+        
         require(bet.opponent != address(0), "Bet not accepted yet");
+        require(!bet.resolved, "Bet already resolved");
+        require(msg.sender == bet.creator || msg.sender == bet.opponent, "Not a participant");
 
+        // Record outcome based on caller
         if (msg.sender == bet.creator) {
-            bet.creatorOutcome = _success;
+            bet.creatorOutcome = _outcome;
         } else {
-            bet.opponentOutcome = _success;
+            bet.opponentOutcome = _outcome;
         }
 
-        emit OutcomeSubmitted(_betId, _success);
+        emit OutcomeSubmitted(_betId, msg.sender, _outcome);
+        
+        // Auto-resolve if both parties have submitted matching outcomes
+        if (bet.creatorOutcome == bet.opponentOutcome && 
+            (bet.creator == msg.sender || bet.opponent == msg.sender)) {
+            _resolveBet(_betId);
+        }
     }
 
-    // Funktion zum Auflösen einer Wette
+    /**
+     * @dev Resolves a bet when outcomes match or when expired
+     * @param _betId ID of the bet to resolve
+     */
     function resolveBet(uint256 _betId) external nonReentrant {
         Bet storage bet = bets[_betId];
-        require(!bet.resolved, "Bet already resolved");
+        
         require(bet.opponent != address(0), "Bet not accepted yet");
-
+        require(!bet.resolved, "Bet already resolved");
+        
+        // If expired, resolve differently
         if (block.timestamp >= bet.expiration) {
-            return resolveExpiredBet(_betId);
-        }
-
-        require(bet.creatorOutcome == bet.opponentOutcome, "Outcomes do not match");
-        bet.resolved = true;
-
-        uint256 liquidity = betLiquidity[_betId];
-        uint256 totalStake = bet.creatorStake + bet.opponentStake;
-        uint256 halfStake = totalStake / 2;
-
-        lpToken.approve(address(uniswapRouter), liquidity);
-
-        (uint256 celoAmount, uint256 stableAmount) = uniswapRouter.removeLiquidity(
-            address(celoToken),
-            address(stableToken),
-            liquidity,
-            0,
-            0,
-            address(this),
-            block.timestamp + 15 minutes
-        );
-
-        uint256 totalReceived = celoAmount + stableAmount;
-        uint256 yield = totalReceived > totalStake ? totalReceived - totalStake : 0;
-
-        if (bet.creatorOutcome) {
-            uint256 creatorShare = bet.creatorStake * celoAmount / totalStake;
-            uint256 opponentShare = bet.opponentStake * celoAmount / totalStake;
-
-            require(celoToken.transfer(bet.creator, creatorShare + (yield * 80 / 100)), "Transfer failed");
-            require(celoToken.transfer(bet.opponent, opponentShare + (yield * 20 / 100)), "Transfer failed");
-
-            if (stableAmount > 0) {
-                uint256 creatorStableShare = bet.creatorStake * stableAmount / totalStake;
-                uint256 opponentStableShare = bet.opponentStake * stableAmount / totalStake;
-
-                require(stableToken.transfer(bet.creator, creatorStableShare), "Transfer failed");
-                require(stableToken.transfer(bet.opponent, opponentStableShare), "Transfer failed");
-            }
-
-            require(betM3Token.transfer(bet.creator, 10 * 10 ** 18), "Transfer failed");
-            require(betM3Token.transfer(bet.opponent, 5 * 10 ** 18), "Transfer failed");
+            _resolveExpiredBet(_betId);
         } else {
-            uint256 creatorShare = bet.creatorStake * celoAmount / totalStake;
-            uint256 opponentShare = bet.opponentStake * celoAmount / totalStake;
-
-            require(celoToken.transfer(bet.creator, creatorShare + (yield * 20 / 100)), "Transfer failed");
-            require(celoToken.transfer(bet.opponent, opponentShare + (yield * 80 / 100)), "Transfer failed");
-
-            if (stableAmount > 0) {
-                uint256 creatorStableShare = bet.creatorStake * stableAmount / totalStake;
-                uint256 opponentStableShare = bet.opponentStake * stableAmount / totalStake;
-
-                require(stableToken.transfer(bet.creator, creatorStableShare), "Transfer failed");
-                require(stableToken.transfer(bet.opponent, opponentStableShare), "Transfer failed");
-            }
-
-            require(betM3Token.transfer(bet.creator, 5 * 10 ** 18), "Transfer failed");
-            require(betM3Token.transfer(bet.opponent, 10 * 10 ** 18), "Transfer failed");
+            // Both parties must have submitted outcomes and they must match
+            require(bet.creatorOutcome == bet.opponentOutcome, "Outcomes don't match");
+            _resolveBet(_betId);
         }
-
-        if (stableToken.balanceOf(address(this)) > 0) {
-            require(stableToken.transfer(owner(), stableToken.balanceOf(address(this))), "Transfer failed");
-        }
-
-        emit BetResolved(_betId, yield);
     }
 
-    // Interne Funktion zum Auflösen einer abgelaufenen Wette
-    function resolveExpiredBet(uint256 _betId) internal {
+    /**
+     * @dev Internal function to resolve a bet
+     * @param _betId ID of the bet to resolve
+     */
+    function _resolveBet(uint256 _betId) internal {
         Bet storage bet = bets[_betId];
-        require(block.timestamp >= bet.expiration, "Bet not yet expired");
-        require(!bet.resolved, "Bet already resolved");
-
         bet.resolved = true;
 
-        uint256 liquidity = betLiquidity[_betId];
+        // Calculate total stake and simulated yield (5%)
         uint256 totalStake = bet.creatorStake + bet.opponentStake;
+        uint256 simulatedYield = totalStake * 5 / 100;
 
-        lpToken.approve(address(uniswapRouter), liquidity);
+        // Determine winner and distribute funds
+        address winner;
+        if (bet.creatorOutcome) { // Creator wins
+            uint256 creatorPayout = bet.creatorStake + (simulatedYield * 80 / 100);
+            uint256 opponentPayout = bet.opponentStake + (simulatedYield * 20 / 100);
+            
+            require(celoToken.transfer(bet.creator, creatorPayout), "Creator transfer failed");
+            require(celoToken.transfer(bet.opponent, opponentPayout), "Opponent transfer failed");
+            
+            winner = bet.creator;
+        } else { // Opponent wins
+            uint256 creatorPayout = bet.creatorStake + (simulatedYield * 20 / 100);
+            uint256 opponentPayout = bet.opponentStake + (simulatedYield * 80 / 100);
+            
+            require(celoToken.transfer(bet.creator, creatorPayout), "Creator transfer failed");
+            require(celoToken.transfer(bet.opponent, opponentPayout), "Opponent transfer failed");
+            
+            winner = bet.opponent;
+        }
 
-        (uint256 celoAmount, uint256 stableAmount) = uniswapRouter.removeLiquidity(
-            address(celoToken),
-            address(stableToken),
-            liquidity,
-            0,
-            0,
-            address(this),
-            block.timestamp + 15 minutes
-        );
+        emit BetResolved(_betId, winner, simulatedYield);
+    }
 
-        uint256 totalReceived = celoAmount + stableAmount;
-        uint256 yield = totalReceived > totalStake ? totalReceived - totalStake : 0;
+    /**
+     * @dev Internal function to resolve an expired bet
+     * @param _betId ID of the expired bet to resolve
+     */
+    function _resolveExpiredBet(uint256 _betId) internal {
+        Bet storage bet = bets[_betId];
+        bet.resolved = true;
 
+        // Calculate total stake and simulated yield
+        uint256 totalStake = bet.creatorStake + bet.opponentStake;
+        uint256 simulatedYield = totalStake * 5 / 100;
+
+        address winner;
+        
+        // If outcomes match, distribute as normal
         if (bet.creatorOutcome == bet.opponentOutcome && bet.creatorOutcome != false) {
             if (bet.creatorOutcome) {
-                require(celoToken.transfer(bet.creator, bet.creatorStake + (yield * 80 / 100)), "Transfer failed");
-                require(celoToken.transfer(bet.opponent, bet.opponentStake + (yield * 20 / 100)), "Transfer failed");
-                require(betM3Token.transfer(bet.creator, 10 * 10 ** 18), "Transfer failed");
-                require(betM3Token.transfer(bet.opponent, 5 * 10 ** 18), "Transfer failed");
+                uint256 creatorPayout = bet.creatorStake + (simulatedYield * 80 / 100);
+                uint256 opponentPayout = bet.opponentStake + (simulatedYield * 20 / 100);
+                
+                require(celoToken.transfer(bet.creator, creatorPayout), "Creator transfer failed");
+                require(celoToken.transfer(bet.opponent, opponentPayout), "Opponent transfer failed");
+                
+                winner = bet.creator;
             } else {
-                require(celoToken.transfer(bet.creator, bet.creatorStake + (yield * 20 / 100)), "Transfer failed");
-                require(celoToken.transfer(bet.opponent, bet.opponentStake + (yield * 80 / 100)), "Transfer failed");
-                require(betM3Token.transfer(bet.creator, 5 * 10 ** 18), "Transfer failed");
-                require(betM3Token.transfer(bet.opponent, 10 * 10 ** 18), "Transfer failed");
+                uint256 creatorPayout = bet.creatorStake + (simulatedYield * 20 / 100);
+                uint256 opponentPayout = bet.opponentStake + (simulatedYield * 80 / 100);
+                
+                require(celoToken.transfer(bet.creator, creatorPayout), "Creator transfer failed");
+                require(celoToken.transfer(bet.opponent, opponentPayout), "Opponent transfer failed");
+                
+                winner = bet.opponent;
             }
         } else {
-            require(celoToken.transfer(bet.creator, bet.creatorStake + (yield / 2)), "Transfer failed");
-            require(celoToken.transfer(bet.opponent, bet.opponentStake + (yield / 2)), "Transfer failed");
-            require(betM3Token.transfer(bet.creator, 2 * 10 ** 18), "Transfer failed");
-            require(betM3Token.transfer(bet.opponent, 2 * 10 ** 18), "Transfer failed");
+            // Split yield evenly if outcomes don't match or aren't set
+            uint256 creatorPayout = bet.creatorStake + (simulatedYield / 2);
+            uint256 opponentPayout = bet.opponentStake + (simulatedYield / 2);
+            
+            require(celoToken.transfer(bet.creator, creatorPayout), "Creator transfer failed");
+            require(celoToken.transfer(bet.opponent, opponentPayout), "Opponent transfer failed");
+            
+            winner = address(0); // No clear winner
         }
 
-        if (stableToken.balanceOf(address(this)) > 0) {
-            require(stableToken.transfer(owner(), stableToken.balanceOf(address(this))), "Transfer failed");
-        }
-
-        emit BetResolved(_betId, yield);
+        emit BetResolved(_betId, winner, simulatedYield);
     }
 
-    // Funktion zur Streitbeilegung (nur Owner)
-    function resolveDispute(uint256 _betId, bool _creatorWins) external onlyOwner {
+    /**
+     * @dev Cancels a bet that hasn't been accepted yet
+     * @param _betId ID of the bet to cancel
+     */
+    function cancelBet(uint256 _betId) external {
         Bet storage bet = bets[_betId];
+        
+        require(bet.creator == msg.sender, "Only creator can cancel");
+        require(bet.opponent == address(0), "Bet already accepted");
         require(!bet.resolved, "Bet already resolved");
-        require(bet.opponent != address(0), "Bet not accepted yet");
-        require(bet.creatorOutcome != bet.opponentOutcome, "No dispute");
-
+        
         bet.resolved = true;
-
-        uint256 liquidity = betLiquidity[_betId];
-        uint256 totalStake = bet.creatorStake + bet.opponentStake;
-
-        lpToken.approve(address(uniswapRouter), liquidity);
-
-        (uint256 celoAmount, uint256 stableAmount) = uniswapRouter.removeLiquidity(
-            address(celoToken),
-            address(stableToken),
-            liquidity,
-            0,
-            0,
-            address(this),
-            block.timestamp + 15 minutes
-        );
-
-        uint256 totalReceived = celoAmount + stableAmount;
-        uint256 yield = totalReceived > totalStake ? totalReceived - totalStake : 0;
-
-        if (_creatorWins) {
-            require(celoToken.transfer(bet.creator, bet.creatorStake + yield), "Transfer failed");
-            require(celoToken.transfer(bet.opponent, bet.opponentStake), "Transfer failed");
-        } else {
-            require(celoToken.transfer(bet.creator, bet.creatorStake), "Transfer failed");
-            require(celoToken.transfer(bet.opponent, bet.opponentStake + yield), "Transfer failed");
-        }
-
-        if (stableToken.balanceOf(address(this)) > 0) {
-            require(stableToken.transfer(owner(), stableToken.balanceOf(address(this))), "Transfer failed");
-        }
-
-        emit DisputeResolved(_betId, _creatorWins ? bet.creator : bet.opponent);
+        
+        // Return stake to creator
+        require(celoToken.transfer(bet.creator, bet.creatorStake), "Refund failed");
+        
+        emit BetCancelled(_betId);
     }
 
-    // Funktion zur Rückgabe der Token-URI
-    function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        return tokenURIs[tokenId];
+    /**
+     * @dev Gets details of a bet
+     * @param _betId ID of the bet
+     * @return Bet struct with all bet details
+     */
+    function getBet(uint256 _betId) external view returns (Bet memory) {
+        return bets[_betId];
     }
 
-    // Funktion zum Auffüllen des Community-Pools (nur Owner)
-    function fundCommunityPool(uint256 amount) external onlyOwner {
-        require(betM3Token.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+    /**
+     * @dev Gets the total number of bets created
+     * @return Number of bets
+     */
+    function getBetCount() external view returns (uint256) {
+        return betCounter;
     }
 
-    // Funktion zum Auffüllen des Stablecoin-Pools (nur Owner)
-    function fundStableTokenPool(uint256 amount) external onlyOwner {
-        require(stableToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+    /**
+     * @dev Emergency function to recover tokens sent to the contract by mistake
+     * @param _token Address of the token to recover
+     * @param _amount Amount to recover
+     */
+    function recoverTokens(address _token, uint256 _amount) external onlyOwner {
+        IERC20(_token).transfer(owner(), _amount);
     }
 }

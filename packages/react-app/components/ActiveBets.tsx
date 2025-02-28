@@ -31,9 +31,14 @@ interface BetEvent {
 interface ActiveBetsProps {
   refreshTrigger?: number;
   onRefresh?: () => void;
+  userOnly?: boolean;
 }
 
-export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: externalRefreshTrigger, onRefresh }) => {
+export const ActiveBets: React.FC<ActiveBetsProps> = ({ 
+  refreshTrigger: externalRefreshTrigger, 
+  onRefresh,
+  userOnly = false
+}) => {
   const { acceptBet, getBet, address, approveToken, getNoLossBetAddress } = useWeb3();
   const [bets, setBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState<{ [key: string]: boolean }>({});
@@ -41,6 +46,7 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: external
   const [filter, setFilter] = useState<'all' | 'created' | 'active' | 'completed'>('all');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedBet, setSelectedBet] = useState<Bet | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const refreshBets = useCallback(() => {
     setRefreshTrigger(prev => prev + 1);
@@ -338,48 +344,45 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: external
     }
   }, [address, refreshTrigger, externalRefreshTrigger]);
 
-  const handleJoinBet = async (bet: Bet) => {
-    if (!address) {
-      setError("Please connect your wallet first");
-      return;
-    }
-
-    // Check if opponent stake is at least 100 CELO
-    const opponentStake = parseFloat(bet.opponentStake || bet.amount);
-    if (opponentStake < 100) {
-      setError("Minimum stake to join a bet is 100 CELO");
-      return;
-    }
-
-    // Show the modal instead of immediately joining
-    setSelectedBet(bet);
-  };
-
-  const handleConfirmJoin = async (prediction: boolean) => {
-    if (!selectedBet) return;
-
-    setLoading(prev => ({ ...prev, [selectedBet.id]: true }));
-    setError(null);
-
+  const handleJoinBet = async (betId: string, prediction: boolean, customStake?: string) => {
+    setJoinError(null);
+    
     try {
-      // First approve token spending
-      const approveTx = await approveToken(selectedBet.opponentStake);
-      await approveTx.wait();
-
-      // Then join the bet with the selected prediction only
-      const tx = await acceptBet(selectedBet.id, prediction);
-      await tx.wait();
-
-      // Close the modal
-      setSelectedBet(null);
+      // Pass parameters to acceptBet
+      let result;
+      if (customStake) {
+        // If custom stake is provided
+        console.log("Using custom stake");
+        result = await acceptBet(betId, prediction, customStake);
+      } else {
+        // Use default stake
+        console.log("Using default stake");
+        result = await acceptBet(betId, prediction);
+      }
       
-      // Refresh bets
-      refreshBets();
+      // No need to wait for tx.wait() as the acceptBet function already does that
+      console.log("Bet joined successfully:", result);
+      
+      await refreshBets();
+      setSelectedBet(null);
     } catch (error: any) {
       console.error("Error joining bet:", error);
-      setError(error.message);
-    } finally {
-      setLoading(prev => ({ ...prev, [selectedBet.id]: false }));
+      
+      // Set a user-friendly error message
+      let errorMessage = error.message || "Failed to join bet";
+      
+      // Handle specific error messages
+      if (errorMessage.includes("You cannot accept your own bet")) {
+        errorMessage = "You cannot join a bet that you created. Try joining someone else's bet.";
+      } else if (errorMessage.includes("insufficient funds")) {
+        errorMessage = "You don't have enough CELO tokens to join this bet.";
+      } else if (errorMessage.includes("user rejected transaction")) {
+        errorMessage = "Transaction was cancelled.";
+      } else if (errorMessage.includes("This bet has already been accepted")) {
+        errorMessage = "This bet has already been accepted by another user. Please try a different bet.";
+      }
+      
+      setJoinError(errorMessage);
     }
   };
 
@@ -441,39 +444,48 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: external
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           <p className="ml-4 text-gray-600">Loading bets...</p>
         </div>
+      ) : bets.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {bets
+            .filter(bet => !userOnly || (
+              address && (
+                bet.creator.toLowerCase() === address.toLowerCase() || 
+                bet.opponent.toLowerCase() === address.toLowerCase()
+              )
+            ))
+            .map((bet) => (
+              <div key={bet.id} className="bg-white overflow-hidden shadow rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                <BetDisplay
+                  bet={bet}
+                  onJoin={() => setSelectedBet(bet)}
+                  onBetUpdated={refreshBets}
+                  isLoading={loading[bet.id]}
+                />
+              </div>
+            ))}
+        </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {filteredBets.map(bet => (
-            <BetDisplay
-              key={bet.id}
-              bet={bet}
-              onJoin={() => handleJoinBet(bet)}
-              onBetUpdated={handleBetUpdated}
-              isLoading={loading[bet.id] || false}
-            />
-          ))}
-
-          {filteredBets.length === 0 && (
-            <div className="col-span-2 bg-gray-50 p-6 rounded-lg text-center">
-              <p className="text-gray-600 mb-2">No bets found.</p>
-              <p className="text-gray-500 text-sm mb-4">
-                {filter === 'all' 
-                  ? 'Create a new bet to get started!'
-                  : `No ${filter} bets found. Try a different filter.`}
-              </p>
-              <button 
-                onClick={refreshBets}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md text-sm transition-colors"
-              >
-                <div className="flex items-center justify-center">
-                  <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh
-                </div>
-              </button>
-            </div>
-          )}
+        <div className="text-center py-12">
+          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <h3 className="mt-2 text-sm font-medium text-gray-900">
+            {userOnly ? "You don't have any bets yet" : "No bets found"}
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">
+            {userOnly ? "Create a new bet to get started!" : "Be the first to create a bet!"}
+          </p>
+          <div className="mt-6">
+            <button
+              onClick={() => window.location.href = '#create'}
+              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+            >
+              <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+              Create New Bet
+            </button>
+          </div>
         </div>
       )}
 
@@ -482,7 +494,7 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({ refreshTrigger: external
         <JoinBetModal
           bet={selectedBet}
           onClose={() => setSelectedBet(null)}
-          onJoin={(prediction) => handleConfirmJoin(prediction)}
+          onJoin={(prediction, customStake) => handleJoinBet(selectedBet.id, prediction, customStake)}
           isLoading={loading[selectedBet.id] || false}
         />
       )}

@@ -185,8 +185,8 @@
       ]
     },
     "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\NoLossBet.sol": {
-      "lastModificationDate": 1740589763238,
-      "contentHash": "2a8444f898d1895657bb8960bf54c8bf",
+      "lastModificationDate": 1740731036683,
+      "contentHash": "ab71b08ac163c5cc864ce6b67cfdebcc",
       "sourceName": "packages/hardhat/contracts/NoLossBet.sol",
       "solcConfig": {
         "version": "0.8.19",
@@ -212,7 +212,6 @@
         }
       },
       "imports": [
-        "@openzeppelin/contracts/token/ERC721/ERC721.sol",
         "@openzeppelin/contracts/token/ERC20/IERC20.sol",
         "@openzeppelin/contracts/access/Ownable.sol",
         "@openzeppelin/contracts/security/ReentrancyGuard.sol"
@@ -221,7 +220,6 @@
         "^0.8.19"
       ],
       "artifacts": [
-        "IUniswapV2Router",
         "NoLossBet"
       ]
     },

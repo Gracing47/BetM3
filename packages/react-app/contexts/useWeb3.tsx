@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { ethers } from 'ethers';
-import { NoLossBetABI, MockCELOABI, UniswapPoolMockABI, BetM3TokenABI } from '../abis/generated/index';
+import { NoLossBetABI, MockCELOABI } from '../abis/generated/index';
 import { CONTRACT_ADDRESSES } from '../config/contracts';
 
 // Definiere die globale Window-Schnittstelle mit ethereum
@@ -23,31 +23,35 @@ export interface Web3ContextType {
   isConnecting: boolean;
   networkName: string;
   createBet: (creatorStake: string, opponentStake: string, condition: string, durationDays: string, prediction: boolean) => Promise<any>;
-  acceptBet: (betId: string, prediction: boolean, customStake?: string, commentText?: string) => Promise<any>;
+  acceptBet: (betId: string, prediction: boolean, customStake?: string) => Promise<any>;
   getBet: (betId: string) => Promise<any>;
   submitOutcome: (betId: string, outcome: boolean) => Promise<any>;
   resolveBet: (betId: string) => Promise<any>;
   resolveDispute: (betId: string, winner: string) => Promise<any>;
   approveToken: (amount: string) => Promise<any>;
+  approveStableToken: (amount: string) => Promise<any>;
   getCELOBalance: (address: string | any) => Promise<bigint>;
   getNextBetId: () => Promise<number>;
   mintCELO: (amount: string) => Promise<any>;
   getNoLossBetAddress: () => string;
   getMockCELOAddress: () => string;
-  getCUSDTokenAddress: () => string;
-  getBetM3TokenAddress: () => string;
-  getUniswapPoolMockAddress: () => string;
-  getLPTokenAddress: () => string;
+  getCUSDTokenAddress: () => string | undefined;
+  getBetM3TokenAddress: () => string | undefined;
+  getUniswapPoolMockAddress: () => string | undefined;
+  getLPTokenAddress: () => string | undefined;
+  connectWallet: () => Promise<void>;
 }
 
 const { 
   noLossBet: NO_LOSS_BET_ADDRESS,
-  mockCELO: MOCK_CELO_ADDRESS,
-  cUSDToken: CUSD_TOKEN_ADDRESS,
-  betM3Token: BET_M3_TOKEN_ADDRESS,
-  uniswapPoolMock: UNISWAP_POOL_MOCK_ADDRESS,
-  lpToken: LP_TOKEN_ADDRESS,
+  mockCELO: MOCK_CELO_ADDRESS
 } = CONTRACT_ADDRESSES;
+
+// Define undefined values for removed contracts
+const CUSD_TOKEN_ADDRESS: string | undefined = undefined;
+const BET_M3_TOKEN_ADDRESS: string | undefined = undefined;
+const UNISWAP_POOL_MOCK_ADDRESS: string | undefined = undefined;
+const LP_TOKEN_ADDRESS: string | undefined = undefined;
 
 // Hardhat Netzwerk-Konfiguration
 const HARDHAT_CHAIN_ID = '0x7a69'; // 31337 in hex für lokales Hardhat-Netzwerk
@@ -85,142 +89,60 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check if we're in a browser environment
   const isBrowser = typeof window !== 'undefined';
   
-  // If we're not in a browser environment, render only children
-  if (!isBrowser) {
-    const dummyContextValue: Web3ContextType = {
-      address: null,
-      isConnecting: false,
-      networkName: '',
-      disconnect: () => {},
-      getUserAddress: async () => '',
-      getCELOBalance: async () => BigInt(0),
-      getNextBetId: async () => 0,
-      createBet: async () => { throw new Error('Not available server-side') },
-      acceptBet: async () => { throw new Error('Not available server-side') },
-      getBet: async () => { throw new Error('Not available server-side') },
-      submitOutcome: async () => { throw new Error('Not available server-side') },
-      resolveBet: async () => { throw new Error('Not available server-side') },
-      resolveDispute: async () => { throw new Error('Not available server-side') },
-      approveToken: async () => { throw new Error('Not available server-side') },
-      mintCELO: async () => { throw new Error('Not available server-side') },
-      getNoLossBetAddress: () => '',
-      getMockCELOAddress: () => '',
-      getCUSDTokenAddress: () => '',
-      getBetM3TokenAddress: () => '',
-      getUniswapPoolMockAddress: () => '',
-      getLPTokenAddress: () => ''
-    };
-    
-    return (
-      <Web3Context.Provider value={dummyContextValue}>
-        {children}
-      </Web3Context.Provider>
-    );
-  }
-  
-  // State
+  // 1. All useState hooks
+  const [mounted, setMounted] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
-  const [networkName, setNetworkName] = useState<string>('Hardhat Local');
+  const [networkName, setNetworkName] = useState<string>('');
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
   const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
   const [isAttemptingConnection, setIsAttemptingConnection] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+
+  // 2. All useRef hooks
   const initializationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(true);
 
-  const initializeProviderAndSigner = useCallback(async () => {
-    if (!window.ethereum) {
-      console.warn("No ethereum object found. Please install MetaMask.");
-      return false;
-    }
+  // 3. All useCallback hooks
+  const getNoLossBetAddress = useCallback((): string => NO_LOSS_BET_ADDRESS, []);
+  const getMockCELOAddress = useCallback((): string => MOCK_CELO_ADDRESS, []);
+  const getCUSDTokenAddress = useCallback((): string | undefined => CUSD_TOKEN_ADDRESS, []);
+  const getBetM3TokenAddress = useCallback((): string | undefined => BET_M3_TOKEN_ADDRESS, []);
+  const getUniswapPoolMockAddress = useCallback((): string | undefined => UNISWAP_POOL_MOCK_ADDRESS, []);
+  const getLPTokenAddress = useCallback((): string | undefined => LP_TOKEN_ADDRESS, []);
 
-    // Prevent multiple simultaneous initializations
-    if (isInitializing) {
-      console.log("Provider initialization already in progress, skipping");
-      return false;
+  const getNoLossBetContract = useCallback(() => {
+    if (typeof window === 'undefined') {
+      throw new Error("Cannot get contract in server-side environment");
     }
+    if (!provider) throw new Error("Provider not initialized");
+    return new ethers.Contract(
+      NO_LOSS_BET_ADDRESS,
+      NoLossBetABI,
+      signer || provider
+    );
+  }, [provider, signer]);
 
+  const getNextBetId = useCallback(async (): Promise<number> => {
+    if (typeof window === 'undefined') {
+      return 0;
+    }
     try {
-      setIsInitializing(true);
-      
-      // Check if we're on Hardhat network, switch if not
-      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      if (chainId !== HARDHAT_CHAIN_ID) {
-        try {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: HARDHAT_CHAIN_ID }],
-          });
-        } catch (switchError: any) {
-          if (switchError.code === 4902) {
-            try {
-              await window.ethereum.request({
-                method: 'wallet_addEthereumChain',
-                params: [HARDHAT_NETWORK_PARAMS],
-              });
-            } catch (addError) {
-              console.error('Error adding Hardhat network:', addError);
-            }
-          } else {
-            console.error('Error switching to Hardhat network:', switchError);
-          }
-        }
-      }
-      
-      const web3Provider = new ethers.BrowserProvider(window.ethereum);
-      setProvider(web3Provider);
-      const accounts = await web3Provider.listAccounts();
-      if (accounts.length > 0) {
-        // Make sure we're storing a proper string address
-        const account = accounts[0];
-        console.log("Got account from provider:", account, "type:", typeof account);
-        
-        if (account) {
-          let addressString: string;
-          
-          if (typeof account === 'string') {
-            addressString = account;
-          } else if (typeof account === 'object' && 'address' in account && typeof account.address === 'string') {
-            addressString = account.address;
-          } else if (typeof account.toString === 'function') {
-            const str = account.toString();
-            if (str && str.startsWith('0x')) {
-              addressString = str;
-            } else {
-              console.error("Account toString() did not return a valid address:", str);
-              return false;
-            }
-          } else {
-            console.error("Could not extract a valid address from account:", account);
-            return false;
-          }
-          
-          if (addressString && addressString.startsWith('0x')) {
-            setAddress(addressString);
-            console.log("Set address to:", addressString);
-          } else {
-            console.error("Invalid address format:", addressString);
-            return false;
-          }
-        } else {
-          console.error("Account is null or undefined");
-          return false;
-        }
-        
-        const signerInstance = await web3Provider.getSigner();
-        setSigner(signerInstance);
-        setNetworkName('Hardhat Local');
-        return true;
-      }
-      return false;
+      const contract = getNoLossBetContract();
+      const nextBetId = await contract.nextBetId();
+      return Number(nextBetId);
     } catch (error) {
-      console.error("Failed to initialize provider and signer:", error);
-      return false;
-    } finally {
-      setIsInitializing(false);
+      console.error("Failed to get next bet ID:", error);
+      return 0;
     }
-  }, [isInitializing]);
+  }, [getNoLossBetContract]);
+
+  const getCeloTokenAddress = useCallback(() => {
+    if (!provider) {
+      return MOCK_CELO_ADDRESS;
+    }
+    return MOCK_CELO_ADDRESS;
+  }, [provider]);
 
   const handleAccountsChanged = useCallback(async (accounts: string[]) => {
     if (accounts.length === 0) {
@@ -228,21 +150,14 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       setSigner(null);
       localStorage.removeItem(WALLET_KEY);
     } else {
-      // Ensure we're storing a proper string address, not an object
-      console.log("Account changed to:", accounts[0], "type:", typeof accounts[0]);
-      
-      // Properly type the account
       const account = accounts[0] as string | { toString(): string };
-      
       const addressString = typeof account === 'string' ? account : 
-                           (account && typeof account === 'object' && 'toString' in account) ? 
-                           account.toString() : null;
+                         (account && typeof account === 'object' && 'toString' in account) ? 
+                         account.toString() : null;
       
       if (addressString && addressString.startsWith('0x')) {
         setAddress(addressString);
-        console.log("Set address to:", addressString);
       } else {
-        console.error("Invalid address format from accounts change:", accounts[0]);
         setAddress(null);
       }
       
@@ -258,12 +173,9 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [provider]);
 
-  // Debounced version of handleChainChanged
   const debouncedHandleChainChanged = useCallback(
     debounce((chainId: string) => {
       if (chainId !== HARDHAT_CHAIN_ID) {
-        console.warn('Network changed to non-Hardhat network. Attempting to switch back...');
-        // Attempt to switch back to Hardhat
         if (window.ethereum) {
           window.ethereum.request({
             method: 'wallet_switchEthereumChain',
@@ -276,102 +188,98 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 500),
     []
   );
-  
-  // Debounced initialization function
-  const debouncedInitialize = useCallback(
-    debounce(async () => {
-      if (!mountedRef.current || isInitializing) return;
 
-      try {
-        setIsInitializing(true);
-        await initializeProviderAndSigner();
-      } finally {
-        if (mountedRef.current) {
-          setIsInitializing(false);
+  const initializeProviderAndSigner = useCallback(async () => {
+    if (!isBrowser) return;
+    
+    try {
+      if (!window.ethereum) {
+        console.warn("No ethereum object found. Please install MetaMask.");
+        return;
+      }
+      
+      // Check if the user explicitly disconnected
+      if (localStorage.getItem('WALLET_EXPLICITLY_DISCONNECTED') === 'true') {
+        console.log("User explicitly disconnected. Skipping auto-connect.");
+        // Ensure we clear any connected state
+        setAddress(null);
+        setSigner(null);
+        setProvider(null);
+        return;
+      }
+
+      const web3Provider = new ethers.BrowserProvider(window.ethereum);
+      setProvider(web3Provider);
+      
+      // Check if accounts are available
+      const accounts = await web3Provider.listAccounts();
+      if (accounts.length > 0) {
+        setAddress(accounts[0].address);
+        setSigner(await web3Provider.getSigner());
+        
+        // Store connection status
+        localStorage.setItem('WALLET_CONNECTED', 'true');
+      } else {
+        // If no accounts are available, check if the user was previously connected
+        if (localStorage.getItem('WALLET_CONNECTED') === 'true' && 
+            localStorage.getItem('WALLET_EXPLICITLY_DISCONNECTED') !== 'true') {
+          // Try to connect
+          try {
+            await window.ethereum.request({ method: 'eth_requestAccounts' });
+            const newAccounts = await web3Provider.listAccounts();
+            if (newAccounts.length > 0) {
+              setAddress(newAccounts[0].address);
+              setSigner(await web3Provider.getSigner());
+            }
+          } catch (error) {
+            console.log("User rejected connection request");
+            localStorage.removeItem('WALLET_CONNECTED');
+          }
         }
       }
-    }, 1000),
-    [initializeProviderAndSigner]
-  );
-
-  useEffect(() => {
-    mountedRef.current = true;
-
-    const ethereum = window?.ethereum;
-    if (typeof window !== 'undefined' && ethereum) {
-      // Initial setup
-      debouncedInitialize();
-
-      // Event listeners
-      const handleChainChange = () => {
-        if (mountedRef.current) {
-          debouncedInitialize();
-        }
-      };
-
-      const handleAccountsChange = () => {
-        if (mountedRef.current) {
-          debouncedInitialize();
-        }
-      };
-
-      ethereum.on('chainChanged', handleChainChange);
-      ethereum.on('accountsChanged', handleAccountsChange);
-
-      return () => {
-        mountedRef.current = false;
-        if (initializationTimeoutRef.current) {
-          clearTimeout(initializationTimeoutRef.current);
-        }
-        ethereum.removeListener('chainChanged', handleChainChange);
-        ethereum.removeListener('accountsChanged', handleAccountsChange);
-      };
-    }
-  }, [debouncedInitialize]);
-  
-  const getNoLossBetContract = useCallback(() => {
-    if (typeof window === 'undefined') {
-      throw new Error("Cannot get contract in server-side environment");
-    }
-    if (!provider) throw new Error("Provider not initialized");
-    return new ethers.Contract(
-      NO_LOSS_BET_ADDRESS,
-      NoLossBetABI,
-      signer || provider
-    );
-  }, [provider, signer]);
-  
-  const getNextBetId = useCallback(async (): Promise<number> => {
-    if (typeof window === 'undefined') {
-      return 0;
-    }
-    try {
-      const contract = getNoLossBetContract();
-      const nextBetId = await contract.nextBetId();
-      return Number(nextBetId);
+      
+      // Update network name
+      const network = await web3Provider.getNetwork();
+      setNetworkName(network.chainId.toString());
+      
     } catch (error) {
-      console.error("Failed to get next bet ID:", error);
-      return 0;
+      console.error("Failed to initialize provider:", error);
     }
-  }, [getNoLossBetContract]);
-  
-  const getCeloTokenAddress = useCallback(() => {
-    // Use MOCK_CELO_ADDRESS for local development or if chainId is not available
-    if (!provider) {
-      return MOCK_CELO_ADDRESS;
+  }, [isBrowser]);
+
+  const disconnect = useCallback(() => {
+    console.log("Disconnecting wallet...");
+    // Set the explicit disconnection flag in localStorage
+    localStorage.setItem('WALLET_EXPLICITLY_DISCONNECTED', 'true');
+    localStorage.removeItem('WALLET_CONNECTED');
+    
+    // Clear all connection state
+    setAddress(null);
+    setSigner(null);
+    setProvider(null);
+    setIsConnecting(false);
+    
+    if (typeof window !== 'undefined' && window.ethereum) {
+      try {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', debouncedHandleChainChanged);
+      } catch (error) {
+        console.error("Error removing listeners during disconnect:", error);
+      }
     }
     
-    // Try to get chainId from the provider
-    return MOCK_CELO_ADDRESS; // Default to mock for now since we're mainly testing locally
-  }, [provider]);
-  
+    return Promise.resolve();
+  }, [handleAccountsChanged, debouncedHandleChainChanged]);
+
   const getUserAddress = useCallback(async (): Promise<string> => {
     if (!window.ethereum) {
       throw new Error('No Ethereum wallet found. Please install MetaMask or another compatible wallet.');
     }
+    
     setIsConnecting(true);
     try {
-      // Ensure we're on Hardhat network
+      localStorage.removeItem('WALLET_EXPLICITLY_DISCONNECTED');
+      
       const chainId = await window.ethereum.request({ method: 'eth_chainId' });
       if (chainId !== HARDHAT_CHAIN_ID) {
         try {
@@ -381,55 +289,35 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         } catch (switchError: any) {
           if (switchError.code === 4902) {
-            try {
-              await window.ethereum.request({
-                method: 'wallet_addEthereumChain',
-                params: [HARDHAT_NETWORK_PARAMS],
-              });
-            } catch (addError) {
-              console.error('Error adding Hardhat network:', addError);
-              throw addError;
-            }
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [HARDHAT_NETWORK_PARAMS],
+            });
           }
         }
       }
       
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      console.log("Retrieved accounts:", accounts, "type of first account:", typeof accounts[0]);
-      
-      // Properly type the account
       const account = accounts[0] as string | { toString(): string };
-      
-      // Ensure we're storing a proper string address, not an object
       const addressString = typeof account === 'string' ? account : 
-                           (account && typeof account === 'object' && 'toString' in account) ? 
-                           account.toString() : null;
+                         (account && typeof account === 'object' && 'toString' in account) ? 
+                         account.toString() : null;
       
       if (!addressString || !addressString.startsWith('0x')) {
-        console.error("Invalid address format:", accounts[0]);
         throw new Error('Failed to get a valid Ethereum address');
       }
       
       setAddress(addressString);
-      console.log("Set address to:", addressString);
       localStorage.setItem(WALLET_KEY, 'true');
       
       if (provider) {
-        try {
-          const signerInstance = await provider.getSigner();
-          setSigner(signerInstance);
-        } catch (error) {
-          console.error("Failed to get signer:", error);
-        }
+        const signerInstance = await provider.getSigner();
+        setSigner(signerInstance);
       } else {
         const web3Provider = new ethers.BrowserProvider(window.ethereum);
         setProvider(web3Provider);
-        try {
-          const signerInstance = await web3Provider.getSigner();
-          setSigner(signerInstance);
-        } catch (error) {
-          console.error("Failed to get signer:", error);
-        }
+        const signerInstance = await web3Provider.getSigner();
+        setSigner(signerInstance);
       }
       setNetworkName('Hardhat Local');
       
@@ -441,7 +329,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsConnecting(false);
     }
   }, [provider]);
-  
+
   const getContracts = useCallback(async () => {
     if (!window.ethereum) {
       throw new Error('No Ethereum wallet found. Please install MetaMask or another compatible wallet.');
@@ -462,17 +350,9 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         signer
       );
   
-      const betM3Token = new ethers.Contract(
-        BET_M3_TOKEN_ADDRESS,
-        BetM3TokenABI,
-        signer
-      );
-  
-      const uniswapPoolMock = new ethers.Contract(
-        UNISWAP_POOL_MOCK_ADDRESS,
-        UniswapPoolMockABI,
-        signer
-      );
+      // Only create contracts for addresses that exist
+      let betM3Token = undefined;
+      let uniswapPoolMock = undefined;
   
       return {
         signer,
@@ -486,24 +366,19 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       throw err;
     }
   }, []);
-  
+
   const mintCELO = useCallback(async (amount: string = "110") => {
-    console.log("Minting CELO tokens...");
     try {
       const userAddress = address || await getUserAddress();
-      console.log("Minting for address:", userAddress);
       const { mockCELO } = await getContracts();
       if (!mockCELO) {
         throw new Error("Failed to get MockCELO contract instance");
       }
       const amountWei = ethers.parseEther(amount);
-      console.log(`Minting ${amount} CELO (${amountWei.toString()} wei)`);
       const mintTx = await mockCELO.simulateUnstaking(amountWei, {
         gasLimit: 300000
       });
-      console.log("Mint transaction sent:", mintTx.hash);
-      const mintReceipt = await mintTx.wait();
-      console.log("Mint transaction confirmed in block:", mintReceipt.blockNumber);
+      await mintTx.wait();
       return {
         success: true,
         hash: mintTx.hash,
@@ -514,30 +389,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(`Failed to mint CELO tokens: ${error.message}`);
     }
   }, [address, getUserAddress, getContracts]);
-  
-  const disconnect = useCallback(() => {
-    console.log("Disconnecting wallet...");
-    // Clear all wallet-related state
-    setAddress(null);
-    setSigner(null);
-    setProvider(null);
-    setIsConnecting(false);
-    // Remove from localStorage
-    localStorage.removeItem(WALLET_KEY);
-    
-    // Force UI refresh if needed
-    if (typeof window !== 'undefined' && window.ethereum) {
-      // Potentially remove any lingering listeners to avoid memory leaks
-      try {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum.removeListener('chainChanged', debouncedHandleChainChanged);
-      } catch (error) {
-        console.error("Error removing listeners during disconnect:", error);
-      }
-    }
-    console.log("Wallet disconnected successfully");
-  }, [handleAccountsChanged, debouncedHandleChainChanged]);
-  
+
   const createBet = useCallback(async (
     creatorStake: string,
     opponentStake: string,
@@ -545,280 +397,358 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     durationDays: string,
     prediction: boolean
   ): Promise<any> => {
-    console.log("Creating bet with parameters:", { creatorStake, opponentStake, condition, durationDays, prediction });
-    
     if (isAttemptingConnection) {
-      return Promise.reject(new Error("Wallet connection is in progress. Please try again."));
+      return Promise.reject(new Error("Wallet connection is in progress"));
     }
-
     try {
       const userAddress = await getUserAddress();
-      console.log("User address:", userAddress);
+      if (!signer) throw new Error("No signer available");
       
-      if (!signer) {
-        throw new Error("No signer available. Please connect your wallet.");
-      }
-
-      // First, mint some CELO tokens for testing
       try {
-        console.log("Minting CELO tokens for testing...");
         await mintCELO("200");
-        console.log("Successfully minted CELO tokens");
       } catch (mintError) {
         console.warn("Could not mint CELO tokens:", mintError);
-        // Continue anyway, user might already have tokens
       }
 
-      // The fixed creator stake is 100 CELO in the contract
-      const fixedCreatorStake = ethers.parseEther("100");
+      const MIN_STAKE = "100";
+      let creatorStakeAmount = creatorStake;
+      if (!creatorStakeAmount || parseFloat(creatorStakeAmount) < parseFloat(MIN_STAKE)) {
+        creatorStakeAmount = MIN_STAKE;
+      }
+      
+      const creatorStakeAmountWei = ethers.parseEther(creatorStakeAmount);
       const opponentStakeAmountWei = ethers.parseEther(opponentStake);
       
-      // Get the CELO token contract
       const celoTokenAddress = getCeloTokenAddress();
-      console.log("CELO token address:", celoTokenAddress);
-      
-      // Check user's balance
       const celoContract = new ethers.Contract(
         celoTokenAddress,
-        ["function balanceOf(address owner) view returns (uint256)", 
-         "function approve(address spender, uint256 amount) public returns (bool)"],
+        ["function balanceOf(address) view returns (uint256)", 
+         "function approve(address,uint256) returns (bool)"],
         signer
       );
       
       const balance = await celoContract.balanceOf(userAddress);
-      console.log(`User CELO balance: ${ethers.formatEther(balance)} CELO`);
-      
-      if (balance < fixedCreatorStake) {
-        throw new Error(`Insufficient CELO balance. You need at least 100 CELO to create a bet. Current balance: ${ethers.formatEther(balance)} CELO`);
+      if (balance < creatorStakeAmountWei) {
+        throw new Error(`Insufficient CELO balance`);
       }
       
-      // Approve the contract to spend tokens
-      console.log("Approving CELO transfers for the NoLossBet contract...");
-      try {
-        const approveTx = await celoContract.approve(NO_LOSS_BET_ADDRESS, fixedCreatorStake, {
-          gasLimit: ethers.toBigInt(1000000)
-        });
-        console.log("Approval transaction sent:", approveTx.hash);
-        const approveReceipt = await approveTx.wait();
-        console.log("CELO approval confirmed in block:", approveReceipt.blockNumber);
-      } catch (approvalError: any) {
-        console.error("Error approving CELO transfers:", approvalError);
-        throw new Error(`Failed to approve CELO transfers: ${approvalError.message}`);
-      }
+      const approveTx = await celoContract.approve(NO_LOSS_BET_ADDRESS, creatorStakeAmountWei, {
+        gasLimit: ethers.toBigInt(1000000)
+      });
+      await approveTx.wait();
       
-      // Create the bet using the contract
-      try {
-        console.log("Creating bet with parameters:", {
-          creatorStake: fixedCreatorStake.toString(),
-          opponentStake: opponentStakeAmountWei.toString(),
-          condition,
-          tokenURI: ""
-        });
-        
-        // Get the contract instance
-        const contract = new ethers.Contract(
-          NO_LOSS_BET_ADDRESS,
-          NoLossBetABI,
-          signer
-        );
-        
-        // Call the contract method with all required parameters
-        const tx = await contract.createBet(
-          fixedCreatorStake,       // _creatorStake
-          opponentStakeAmountWei,  // _opponentStake
-          condition,               // _condition
-          "",                      // _tokenURI (empty string)
-          {
-            gasLimit: ethers.toBigInt(5000000)  // Higher gas limit
-          }
-        );
-        
-        console.log("Transaction sent:", tx.hash);
-        
-        // Wait for the transaction to be mined
-        const receipt = await tx.wait();
-        console.log("Transaction confirmed in block:", receipt?.blockNumber);
-        
-        return tx;
-      } catch (error: any) {
-        console.error("Error creating bet:", error);
-        
-        // Try to extract more detailed error information
-        let errorMessage = error.message || "Unknown error";
-        if (error.data) {
-          console.error("Error data:", error.data);
+      const contract = new ethers.Contract(
+        NO_LOSS_BET_ADDRESS,
+        NoLossBetABI,
+        signer
+      );
+      
+      // Convert durationDays to BigInt if it's a string
+      const durationDaysBigInt = durationDays ? ethers.toBigInt(durationDays) : ethers.toBigInt(0);
+      
+      const tx = await contract.createBet(
+        creatorStakeAmountWei,
+        opponentStakeAmountWei,
+        condition,
+        durationDaysBigInt,
+        {
+          gasLimit: ethers.toBigInt(5000000)
         }
-        
-        throw new Error(`Failed to create bet: ${errorMessage}`);
-      }
+      );
+      
+      await tx.wait();
+      return tx;
     } catch (error: any) {
       console.error("Error in createBet:", error);
       throw new Error(`Error creating bet: ${error.message}`);
     }
   }, [signer, getUserAddress, isAttemptingConnection, getCeloTokenAddress, mintCELO]);
-  
+
+  const approveToken = useCallback(async (amount: string): Promise<any> => {
+    try {
+      const { mockCELO } = await getContracts();
+      if (!mockCELO) throw new Error("MockCELO contract not initialized");
+      
+      // Get the NoLossBet address from the configuration
+      const targetAddress = getNoLossBetAddress();
+      
+      console.log(`Approving ${amount} tokens for ${targetAddress}`);
+      const amountWei = ethers.parseEther(amount);
+      const tx = await mockCELO.approve(targetAddress, amountWei);
+      await tx.wait();
+      return tx;
+    } catch (err) {
+      console.error('Error approving tokens:', err);
+      throw err;
+    }
+  }, [getContracts, getNoLossBetAddress]);
+
+  // Function for the owner to approve stableToken transfers
+  const approveStableToken = useCallback(async (amount: string) => {
+    try {
+      if (!signer) throw new Error("Wallet not connected");
+      if (!address) throw new Error("Wallet address is not available");
+      
+      if (typeof window === 'undefined' || !window.ethereum) {
+        throw new Error("No Ethereum wallet found. Please install MetaMask or another compatible wallet.");
+      }
+      
+      // Get the stableToken contract
+      const stableTokenAddress = getCUSDTokenAddress();
+      if (!stableTokenAddress) {
+        throw new Error("Stable token address is not available");
+      }
+      
+      const stableToken = new ethers.Contract(
+        stableTokenAddress,
+        [
+          "function approve(address spender, uint256 amount) external returns (bool)",
+          "function allowance(address owner, address spender) external view returns (uint256)",
+          "function balanceOf(address account) external view returns (uint256)"
+        ],
+        signer
+      );
+      
+      // Get the NoLossBet address
+      const noLossBetAddress = getNoLossBetAddress();
+      
+      // Check stableToken balance
+      const balance = await stableToken.balanceOf(address);
+      console.log(`Current stableToken balance: ${ethers.formatEther(balance)}`);
+      
+      // Check current allowance
+      const currentAllowance = await stableToken.allowance(address, noLossBetAddress);
+      console.log(`Current stableToken allowance: ${ethers.formatEther(currentAllowance)}`);
+      
+      // Convert amount to wei
+      const amountWei = ethers.parseEther(amount);
+      
+      // Check if balance is sufficient
+      if (balance < amountWei) {
+        throw new Error(`Insufficient stableToken balance. You have ${ethers.formatEther(balance)} but need ${amount}`);
+      }
+      
+      // If current allowance is less than the requested amount, approve more
+      if (currentAllowance < amountWei) {
+        console.log(`Approving ${amount} stableTokens for ${noLossBetAddress}`);
+        const tx = await stableToken.approve(noLossBetAddress, amountWei);
+        console.log(`Waiting for stableToken approval transaction: ${tx.hash}`);
+        await tx.wait();
+        console.log(`StableToken approval confirmed`);
+        return tx;
+      } else {
+        console.log(`Sufficient stableToken allowance already exists: ${ethers.formatEther(currentAllowance)}`);
+        return { success: true, message: "Sufficient allowance already exists" };
+      }
+    } catch (err) {
+      console.error('Error approving stableToken:', err);
+      throw err;
+    }
+  }, [signer, address, getCUSDTokenAddress, getNoLossBetAddress]);
+
   const acceptBet = useCallback(async (
     betId: string, 
     prediction: boolean, 
-    customStake?: string, 
-    commentText?: string
-  ): Promise<ethers.ContractTransaction> => {
+    customStake?: string
+  ): Promise<any> => {
     if (typeof window === 'undefined') {
       throw new Error("Cannot accept bet in server-side environment");
     }
+
     if (!signer) throw new Error("Wallet not connected");
+    if (!address) throw new Error("Wallet address is not available");
+
+    console.log(`Accepting bet: betId=${betId}, prediction=${prediction}, customStake=${customStake || 'default'}`);
+
     try {
-      console.log(`Accepting bet ID ${betId} with prediction: ${prediction}`);
-      const contract = getNoLossBetContract();
+      // Get contract instances
+      const { mockCELO } = await getContracts();
+      
+      // Get NoLossBet contract with signer
+      const noLossBetAddress = getNoLossBetAddress();
+      const contract = new ethers.Contract(
+        noLossBetAddress,
+        NoLossBetABI,
+        signer
+      );
+      
+      // Convert betId to number
       const betIdNumber = parseInt(betId);
-      try {
-        const betDetails = await contract.bets(betIdNumber);
-        if (betDetails.creator === "0x0000000000000000000000000000000000000000") {
-          throw new Error(`Bet with ID ${betId} does not exist`);
-        }
-        if (betDetails.opponent !== "0x0000000000000000000000000000000000000000") {
-          throw new Error(`Bet with ID ${betId} has already been accepted`);
-        }
-        if (betDetails.resolved) {
-          throw new Error(`Bet with ID ${betId} has already been resolved`);
-        }
-        if (betDetails.expiration < Math.floor(Date.now() / 1000)) {
-          throw new Error(`Bet with ID ${betId} has expired`);
-        }
-      } catch (betError: any) {
-        console.error("Error checking bet details:", betError);
-        throw new Error(`Failed to check bet details: ${betError.message}`);
+      
+      // Check CELO balance
+      const celoBalance = await mockCELO.balanceOf(address);
+      console.log(`Current CELO balance: ${ethers.formatEther(celoBalance)} CELO`);
+      
+      // Get bet details to determine stake
+      const betDetails = await contract.bets(betIdNumber);
+      console.log("Bet details:", betDetails);
+      
+      // Determine stake amount - always ensure minimum 10 CELO
+      let stakeAmount: bigint;
+      if (customStake) {
+        stakeAmount = ethers.parseEther(customStake);
+      } else {
+        stakeAmount = betDetails.opponentStake;
       }
-      return await contract.acceptBet(betIdNumber, prediction);
+      
+      // Ensure minimum stake of 10 CELO
+      const MIN_STAKE = ethers.parseEther("10");
+      if (stakeAmount < MIN_STAKE) {
+        console.log(`Stake amount ${ethers.formatEther(stakeAmount)} is below minimum. Using 10 CELO instead.`);
+        stakeAmount = MIN_STAKE;
+      }
+      
+      console.log(`Required stake: ${ethers.formatEther(stakeAmount)} (${stakeAmount.toString()})`);
+      
+      // Check if balance is sufficient
+      if (celoBalance < stakeAmount) {
+        throw new Error(`Insufficient CELO balance. You have ${ethers.formatEther(celoBalance)} CELO but need ${ethers.formatEther(stakeAmount)} CELO.`);
+      }
+      
+      // Approve tokens for the transaction
+      console.log(`Approving tokens for bet acceptance: ${ethers.formatEther(stakeAmount)}`);
+      
+      // Check current allowance
+      const currentAllowance = await mockCELO.allowance(address, noLossBetAddress);
+      console.log(`Current allowance: ${ethers.formatEther(currentAllowance)} CELO`);
+      
+      if (currentAllowance < stakeAmount) {
+        console.log(`Insufficient allowance. Approving ${ethers.formatEther(stakeAmount)} CELO...`);
+        const approveTx = await mockCELO.approve(
+          noLossBetAddress,
+          stakeAmount,
+          { gasLimit: 300000 }
+        );
+        
+        console.log(`Waiting for approval transaction: ${approveTx.hash}`);
+        await approveTx.wait();
+        console.log(`Approval confirmed`);
+        
+        // Add a short delay to ensure the blockchain has processed the approval
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        console.log(`Sufficient allowance already exists: ${ethers.formatEther(currentAllowance)} CELO`);
+      }
+      
+      // Call the acceptBet function with only 3 parameters, removing the empty string
+      console.log(`Calling acceptBet with 3 parameters: ${betIdNumber}, ${prediction}, ${stakeAmount.toString()}`);
+      
+      try {
+        const tx = await contract.acceptBet(
+          betIdNumber, 
+          prediction, 
+          stakeAmount,
+          {
+            gasLimit: 500000,
+            gasPrice: ethers.parseUnits("50", "gwei")
+          }
+        );
+        
+        console.log(`Transaction submitted: ${tx.hash}`);
+        const receipt = await tx.wait();
+        console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
+        
+        return {
+          success: true,
+          transaction: tx,
+          betId: betIdNumber
+        };
+      } catch (txError: any) {
+        console.error("Transaction error details:", txError);
+        
+        // Extract revert reason from the error
+        let errorMessage = txError.message || "Unknown error";
+        
+        // Check for revert reason in different places the error might store it
+        const revertReason = 
+          // Look for common error message patterns
+          (errorMessage.match(/reverted with reason string ['"](.+?)['"]/i)?.[1]) ||
+          (errorMessage.match(/reverted: (.+?)(?:\n|$)/i)?.[1]) ||
+          // Check in error.reason
+          txError.reason || 
+          // Look in the error.error object (JSON-RPC errors)
+          (txError.error && typeof txError.error === 'object' && txError.error.message) ||
+          // Check for data.message pattern
+          (txError.data && txError.data.message);
+        
+        if (revertReason) {
+          console.log("Found revert reason:", revertReason);
+          errorMessage = revertReason;
+        }
+        
+        // Check for specific error conditions
+        if (errorMessage.includes("Creator cannot accept own bet")) {
+          throw new Error("You cannot accept your own bet.");
+        } else if (errorMessage.includes("Bet already accepted")) {
+          throw new Error("This bet has already been accepted by another user.");
+        } else if (errorMessage.includes("Bet has expired")) {
+          throw new Error("This bet has expired and can no longer be accepted.");
+        } else if (errorMessage.includes("Opponent stake must be at least 10 CELO")) {
+          throw new Error("The stake amount must be at least 10 CELO.");
+        } else if (errorMessage.includes("Stake transfer failed")) {
+          throw new Error("Failed to transfer CELO tokens. Please ensure you have approved enough tokens.");
+        } else {
+          // If we can't identify the specific error, provide more context
+          console.log("Unhandled contract error:", errorMessage);
+          throw new Error(`Transaction failed: ${errorMessage}`);
+        }
+      }
     } catch (error: any) {
       console.error("Error accepting bet:", error);
       throw new Error(`Failed to accept bet: ${error.message}`);
     }
-  }, [getNoLossBetContract]);
-  
+  }, [getNoLossBetAddress, signer, address, getContracts]);
+
   const getCELOBalance = useCallback(async (address: string | any): Promise<bigint> => {
     try {
-      // Log the address to see what's being passed
-      console.log(`Getting CELO balance for address:`, address, "type:", typeof address);
-      
-      // Extract address string if it's an object
       let addressToUse = '';
       
-      // Handle null/undefined case
-      if (!address) {
-        console.error("Null or undefined address provided");
-        return BigInt(0);
-      }
+      if (!address) return BigInt(0);
       
-      // If it's already a string that looks like an address
       if (typeof address === 'string' && address.startsWith('0x')) {
         addressToUse = address;
-        console.log('Using string address:', addressToUse);
-      }
-      // If address is an object with an address property (like a signer)
-      else if (typeof address === 'object') {
+      } else if (typeof address === 'object') {
         if ('address' in address && typeof address.address === 'string') {
           addressToUse = address.address;
-          console.log('Using address property:', addressToUse);
-        } 
-        // For objects with toString method
-        else if (address.toString && typeof address.toString === 'function') {
-          try {
-            const stringValue = address.toString();
-            // Only use toString result if it looks like an address
-            if (stringValue && typeof stringValue === 'string' && stringValue.startsWith('0x')) {
-              addressToUse = stringValue;
-              console.log('Using toString result:', addressToUse);
-            } else {
-              console.error('toString did not return a valid address format:', stringValue);
-            }
-          } catch (e) {
-            console.error('Error calling toString on address object:', e);
+        } else if (address.toString && typeof address.toString === 'function') {
+          const stringValue = address.toString();
+          if (stringValue && typeof stringValue === 'string' && stringValue.startsWith('0x')) {
+            addressToUse = stringValue;
           }
-        } else {
-          console.error('Address object does not have address property or toString method:', address);
         }
-      } else {
-        console.error('Address is not a string or object:', address, typeof address);
       }
       
-      // Validate that we have a proper address string
       if (!addressToUse || !addressToUse.startsWith('0x')) {
-        console.error('Could not extract valid address from:', address);
         return BigInt(0);
       }
       
-      // First check if Hardhat node is running
-      let localProvider;
-      try {
-        localProvider = new ethers.JsonRpcProvider('http://localhost:8545');
-        const blockNumber = await localProvider.getBlockNumber();
-        console.log(`Connected to Hardhat node, current block: ${blockNumber}`);
-      } catch (providerError) {
-        console.error("Could not connect to local Hardhat node:", providerError);
-        console.log("Returning zero balance as Hardhat node is not available");
-        return BigInt(0);
-      }
+      const localProvider = new ethers.JsonRpcProvider('http://localhost:8545');
+      const mockCELO = new ethers.Contract(
+        MOCK_CELO_ADDRESS,
+        MockCELOABI,
+        localProvider
+      );
       
-      // Check if the contract exists at the specified address
-      try {
-        const code = await localProvider.getCode(MOCK_CELO_ADDRESS);
-        if (code === '0x') {
-          console.error(`No contract found at address ${MOCK_CELO_ADDRESS}`);
-          console.log("Returning zero balance as contract is not deployed");
-          return BigInt(0);
-        }
-        console.log("Contract exists at specified address");
-      } catch (contractError) {
-        console.error("Error checking contract code:", contractError);
-        return BigInt(0);
-      }
-      
-      // Try to get balance using ethers Contract
-      try {
-        const mockCELO = new ethers.Contract(
-          MOCK_CELO_ADDRESS,
-          MockCELOABI,
-          localProvider
-        );
-        
-        // Check if the contract has the balanceOf method
-        if (typeof mockCELO.balanceOf !== 'function') {
-          console.error("Contract does not have balanceOf function");
-          return BigInt(0);
-        }
-        
-        try {
-          // Ensure the address is properly formatted
-          const formattedAddress = ethers.getAddress(addressToUse);
-          console.log("Using formatted address:", formattedAddress);
-          
-          const balance = await mockCELO.balanceOf(formattedAddress);
-          console.log(`Balance retrieved successfully: ${balance.toString()}`);
-          return balance;
-        } catch (addressError) {
-          console.error("Error formatting address:", addressError);
-          return BigInt(0);
-        }
-      } catch (balanceError: any) {
-        console.error('Error getting balance:', balanceError);
-        console.log("Returning zero balance due to error");
-        return BigInt(0);
-      }
+      const formattedAddress = ethers.getAddress(addressToUse);
+      const balance = await mockCELO.balanceOf(formattedAddress);
+      return balance;
     } catch (err) {
-      console.error('Unexpected error in getCELOBalance:', err);
+      console.error('Error in getCELOBalance:', err);
       return BigInt(0);
     }
   }, []);
-  
+
   const getBet = useCallback(async (betId: string): Promise<any> => {
     try {
       const { noLossBet } = await getContracts();
-      if (!noLossBet) {
-        throw new Error("Contracts not initialized");
-      }
-      console.log(`Getting bet with ID: ${betId}`);
+      if (!noLossBet) throw new Error("Contracts not initialized");
+      
       const bet = await noLossBet.bets(betId);
+      
+      // Determine if outcomes have been submitted
+      // In a newly created bet, the opponent is address(0) and outcomes are initialized to false but not actually submitted
+      const hasOpponent = bet.opponent !== ethers.ZeroAddress;
+      
       return {
         id: betId,
         creator: bet.creator,
@@ -826,8 +756,10 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         amount: bet.creatorStake,
         opponentStake: bet.opponentStake,
         condition: bet.condition,
-        creatorOutcome: bet.creatorOutcome,
-        opponentOutcome: bet.opponentOutcome,
+        // If the bet is just created, the creator hasn't submitted an outcome yet
+        creatorOutcome: hasOpponent ? bet.creatorOutcome : null,
+        // When the opponent joins, they submit their outcome, so it's a valid value
+        opponentOutcome: hasOpponent ? bet.opponentOutcome : null,
         resolved: bet.resolved,
         expirationTime: bet.expiration
       };
@@ -836,27 +768,16 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       throw err;
     }
   }, [getContracts]);
-  
+
   const submitOutcome = useCallback(async (betId: string, outcome: boolean): Promise<any> => {
     try {
       const { noLossBet } = await getContracts();
-      if (!noLossBet) {
-        throw new Error("Contracts not initialized");
-      }
-      console.log(`Submitting outcome for bet ID: ${betId}, outcome: ${outcome}`);
-      const bet = await noLossBet.bets(betId);
-      if (bet.resolved) {
-        throw new Error("Bet is already resolved");
-      }
-      if (bet.opponent === ethers.ZeroAddress) {
-        throw new Error("Bet has not been accepted yet");
-      }
+      if (!noLossBet) throw new Error("Contracts not initialized");
+      
       const tx = await noLossBet.submitOutcome(betId, outcome, {
         gasLimit: 500000
       });
-      console.log("Outcome submission transaction sent:", tx.hash);
-      const receipt = await tx.wait();
-      console.log("Outcome submission confirmed in block:", receipt.blockNumber);
+      await tx.wait();
       return {
         success: true,
         betId,
@@ -868,59 +789,163 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       throw err;
     }
   }, [getContracts]);
-  
+
   const resolveBet = useCallback(async (betId: string): Promise<any> => {
     try {
       const { noLossBet } = await getContracts();
-      if (!noLossBet) {
-        throw new Error("Contracts not initialized");
-      }
-      console.log(`Resolving bet with ID: ${betId}`);
+      if (!noLossBet) throw new Error("Contracts not initialized");
+      
+      const tx = await noLossBet.resolveBet(betId);
+      await tx.wait();
       return { success: true, betId, status: "resolved" };
     } catch (err) {
       console.error('Error resolving bet:', err);
       throw err;
     }
   }, [getContracts]);
-  
+
   const resolveDispute = useCallback(async (betId: string, winner: string): Promise<any> => {
     try {
       const { noLossBet } = await getContracts();
-      if (!noLossBet) {
-        throw new Error("Contracts not initialized");
-      }
-      console.log(`Resolving dispute for bet ID: ${betId}, winner: ${winner}`);
+      if (!noLossBet) throw new Error("Contracts not initialized");
+      
+      const tx = await noLossBet.resolveDispute(betId, winner === 'creator');
+      await tx.wait();
       return { success: true, betId, winner };
     } catch (err) {
       console.error('Error resolving dispute:', err);
       throw err;
     }
   }, [getContracts]);
-  
-  const approveToken = useCallback(async (amount: string): Promise<any> => {
-    try {
-      const { mockCELO, noLossBet } = await getContracts();
-      if (!mockCELO || !noLossBet) {
-        throw new Error("Contracts not initialized");
-      }
-      const amountWei = ethers.parseEther(amount);
-      console.log(`Approving ${amount} CELO tokens for the contract...`);
-      const tx = await mockCELO.approve(noLossBet.target, amountWei);
-      console.log("Approval transaction sent:", tx.hash);
-      return tx;
-    } catch (err) {
-      console.error('Error approving tokens:', err);
-      throw err;
+
+  // Füge die connectWallet-Funktion hinzu
+  const connectWallet = useCallback(async () => {
+    if (!window.ethereum) {
+      throw new Error('No Ethereum wallet found. Please install MetaMask or another compatible wallet.');
     }
-  }, [getContracts]);
-  
-  const getNoLossBetAddress = useCallback((): string => NO_LOSS_BET_ADDRESS, []);
-  const getMockCELOAddress = useCallback((): string => MOCK_CELO_ADDRESS, []);
-  const getCUSDTokenAddress = useCallback((): string => CUSD_TOKEN_ADDRESS, []);
-  const getBetM3TokenAddress = useCallback((): string => BET_M3_TOKEN_ADDRESS, []);
-  const getUniswapPoolMockAddress = useCallback((): string => UNISWAP_POOL_MOCK_ADDRESS, []);
-  const getLPTokenAddress = useCallback((): string => LP_TOKEN_ADDRESS, []);
-  
+    
+    setIsConnecting(true);
+    
+    try {
+      // Entferne den expliziten Disconnect-Flag
+      localStorage.removeItem('WALLET_EXPLICITLY_DISCONNECTED');
+      
+      // Fordere Konten an
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+      
+      if (accounts.length > 0) {
+        // Initialisiere Provider und Signer
+        await initializeProviderAndSigner();
+        
+        // Speichere den Verbindungsstatus
+        localStorage.setItem('WALLET_CONNECTED', 'true');
+      }
+    } catch (error) {
+      console.error("Failed to connect wallet:", error);
+      throw error;
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [initializeProviderAndSigner]);
+
+  // 4. All useEffect hooks
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && isBrowser) {
+      const initAndSetAddress = async () => {
+        await initializeProviderAndSigner();
+        setAddress('0xdD2FD4581271e230360230F9337D5c0430Bf44C0');
+      };
+      initAndSetAddress();
+    }
+  }, [mounted, initializeProviderAndSigner, isBrowser]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    const ethereum = window?.ethereum;
+    if (isBrowser && ethereum && localStorage.getItem('WALLET_EXPLICITLY_DISCONNECTED') !== 'true') {
+      const restoreConnection = async () => {
+        try {
+          const accounts = await ethereum.request({ method: 'eth_accounts' });
+          if (accounts && accounts.length > 0) {
+            await initializeProviderAndSigner();
+            localStorage.setItem('WALLET_CONNECTED', 'true');
+          }
+        } catch (error) {
+          console.error("Error restoring connection:", error);
+        }
+      };
+      
+      restoreConnection();
+
+      const handleChainChange = () => {
+        if (mountedRef.current) {
+          initializeProviderAndSigner();
+        }
+      };
+
+      const handleAccountsChange = () => {
+        if (mountedRef.current) {
+          initializeProviderAndSigner();
+        }
+      };
+
+      ethereum.on('chainChanged', handleChainChange);
+      ethereum.on('accountsChanged', handleAccountsChange);
+
+      return () => {
+        mountedRef.current = false;
+        if (initializationTimeoutRef.current) {
+          clearTimeout(initializationTimeoutRef.current);
+        }
+        ethereum.removeListener('chainChanged', handleChainChange);
+        ethereum.removeListener('accountsChanged', handleAccountsChange);
+      };
+    }
+  }, [initializeProviderAndSigner, isBrowser]);
+
+  // 5. Early return for server-side rendering
+  if (!mounted || !isBrowser) {
+    return (
+      <Web3Context.Provider
+        value={{
+          address: null,
+          getUserAddress: async () => { throw new Error('Not available') },
+          disconnect: () => { },
+          isConnecting: false,
+          networkName: '',
+          createBet: async () => { throw new Error('Not available') },
+          acceptBet: async () => { throw new Error('Not available') },
+          getBet: async () => { throw new Error('Not available') },
+          submitOutcome: async () => { throw new Error('Not available') },
+          resolveBet: async () => { throw new Error('Not available') },
+          resolveDispute: async () => { throw new Error('Not available') },
+          getCELOBalance: async () => { throw new Error('Not available') },
+          getNextBetId: async () => { throw new Error('Not available') },
+          approveToken: async () => { throw new Error('Not available') },
+          approveStableToken: async () => { throw new Error('Not available') },
+          mintCELO: async () => { throw new Error('Not available') },
+          getNoLossBetAddress: () => NO_LOSS_BET_ADDRESS,
+          getMockCELOAddress: () => MOCK_CELO_ADDRESS,
+          getCUSDTokenAddress: () => undefined,
+          getBetM3TokenAddress: () => undefined,
+          getUniswapPoolMockAddress: () => undefined,
+          getLPTokenAddress: () => undefined,
+          connectWallet: async () => { throw new Error('Not available') }
+        }}
+      >
+        {children}
+      </Web3Context.Provider>
+    );
+  }
+
   return (
     <Web3Context.Provider
       value={{
@@ -936,6 +961,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         resolveBet,
         resolveDispute,
         approveToken,
+        approveStableToken,
         getCELOBalance,
         getNextBetId,
         mintCELO,
@@ -944,7 +970,8 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         getCUSDTokenAddress,
         getBetM3TokenAddress,
         getUniswapPoolMockAddress,
-        getLPTokenAddress
+        getLPTokenAddress,
+        connectWallet
       }}
     >
       {children}
