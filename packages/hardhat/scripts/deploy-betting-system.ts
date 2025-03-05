@@ -30,53 +30,14 @@ async function main() {
     const bettingManagerFactoryAddress = await bettingManagerFactory.getAddress();
     console.log("BettingManagerFactory deployed to:", bettingManagerFactoryAddress);
 
-    // Create a betting contract instance through the factory
-    console.log("Creating betting contract instance...");
-    const createTx = await bettingManagerFactory.createBettingContract(cUSDTokenAddress);
-    const receipt = await createTx.wait();
-    
-    // Verbesserte Behandlung zum Extrahieren der Betting-Contract-Adresse
-    console.log("Extracting betting contract address from transaction logs...");
-    let bettingContractAddress;
-    
-    if (receipt && receipt.logs && receipt.logs.length > 0) {
-      const event = receipt.logs[0];
-      
-      try {
-        const parsedLog = bettingManagerFactory.interface.parseLog({
-          topics: event.topics as string[],
-          data: event.data as string
-        });
-        
-        if (parsedLog && parsedLog.args && parsedLog.args.length > 0) {
-          bettingContractAddress = parsedLog.args[0];
-          console.log("Successfully extracted betting contract address:", bettingContractAddress);
-        }
-      } catch (error) {
-        console.error("Error parsing event log:", error);
-      }
-    }
-    
-    // Fallback: Versuchen, alle erzeugten Verträge über die Factory abzurufen
-    if (!bettingContractAddress) {
-      console.log("Could not extract address from event, trying to get it from the factory...");
-      // @ts-ignore
-      const contractCount = await bettingManagerFactory.getBettingContractsCount();
-      if (contractCount > 0) {
-        // @ts-ignore
-        bettingContractAddress = await bettingManagerFactory.getBettingContract(contractCount - 1);
-        console.log("Retrieved betting contract address from factory:", bettingContractAddress);
-      } else {
-        console.error("No betting contracts found in the factory.");
-        bettingContractAddress = "0x0000000000000000000000000000000000000000";
-      }
-    }
-    
-    console.log("NoLossBetMulti instance created at:", bettingContractAddress);
-
-    // Get the betting contract
-    const NoLossBetMulti = await ethers.getContractFactory("NoLossBetMulti");
-    const bettingContract = NoLossBetMulti.attach(bettingContractAddress);
+    // Statt den Factory-Ansatz zu verwenden, deployen wir direkt einen NoLossBetMulti-Vertrag
+    // Das vermeidet Probleme mit der Ereignisextraktion und stellt sicher, dass wir eine gültige Adresse haben
+    console.log("Deploying NoLossBetMulti directly...");
+    const NoLossBetMultiFactory = await ethers.getContractFactory("NoLossBetMulti");
+    const bettingContract = await NoLossBetMultiFactory.deploy(cUSDTokenAddress);
+    await bettingContract.waitForDeployment();
+    const bettingContractAddress = await bettingContract.getAddress();
+    console.log("NoLossBetMulti deployed to:", bettingContractAddress);
 
     // Mint initial tokens for testing
     console.log("Minting initial tokens for testing...");
@@ -85,6 +46,11 @@ async function main() {
     const mintAmount = ethers.parseEther("10000");
     await cUSDToken.mint(await deployer.getAddress(), mintAmount);
     console.log(`Minted ${ethers.formatEther(mintAmount)} cUSD to deployer`);
+
+    // Wichtig: Überweise zusätzliche Token an den Betting-Vertrag für die Yield-Simulation
+    const yieldAmount = ethers.parseEther("1000"); // 1000 Token für Yield
+    await cUSDToken.mint(bettingContractAddress, yieldAmount);
+    console.log(`Minted ${ethers.formatEther(yieldAmount)} cUSD to betting contract for yield`);
 
     // Set a custom yield rate (optional)
     await bettingContract.setYieldRate(10); // 10% yield instead of default 5%

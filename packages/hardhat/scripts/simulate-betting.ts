@@ -18,7 +18,7 @@ async function main() {
     const deploymentInfo = JSON.parse(fs.readFileSync(deploymentPath, 'utf8'));
     const { cUSDToken: cUSDTokenAddress, bettingContract: bettingContractAddress } = deploymentInfo.addresses;
     
-    // Get contract instances - use any type to avoid TS errors
+    // Get contract instances
     const cUSDToken = await ethers.getContractAt("cUSDToken", cUSDTokenAddress);
     const bettingContract = await ethers.getContractAt("NoLossBetMulti", bettingContractAddress);
     
@@ -35,9 +35,10 @@ async function main() {
     console.log("\nPreparing token balances...");
     
     const mintAmount = ethers.parseEther("1000");
+    
+    // TypeScript-freundliche Version, die Contract-Aufrufe korrekt typisiert
     for (const participant of [participant1, participant2, participant3]) {
-      // @ts-ignore - Ignoring TypeScript errors for contract method calls
-      await cUSDToken.mint(await participant.getAddress(), mintAmount);
+      await cUSDToken.connect(owner).mint(await participant.getAddress(), mintAmount);
       console.log(`Minted ${ethers.formatEther(mintAmount)} cUSD to ${await participant.getAddress()}`);
     }
     
@@ -45,12 +46,10 @@ async function main() {
     console.log("\nApproving token spending...");
     
     const approveAmount = ethers.parseEther("500");
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
-    await cUSDToken.approve(bettingContractAddress, approveAmount);
+    await cUSDToken.connect(owner).approve(bettingContractAddress, approveAmount);
     console.log(`Owner approved ${ethers.formatEther(approveAmount)} cUSD`);
     
     for (const participant of [participant1, participant2, participant3]) {
-      // @ts-ignore - Ignoring TypeScript errors for contract method calls
       await cUSDToken.connect(participant).approve(bettingContractAddress, approveAmount);
       console.log(`${await participant.getAddress()} approved ${ethers.formatEther(approveAmount)} cUSD`);
     }
@@ -68,8 +67,7 @@ async function main() {
     console.log(`Creator stake: ${ethers.formatEther(creatorStake)} cUSD`);
     console.log(`Duration: ${betDuration} days`);
     
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
-    const createTx = await bettingContract.createBet(
+    const createTx = await bettingContract.connect(owner).createBet(
       creatorStake,
       betCondition,
       betDuration,
@@ -84,24 +82,20 @@ async function main() {
     
     // Participant 1 bets TRUE (same as creator)
     const stake1 = ethers.parseEther("50");
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
     await bettingContract.connect(participant1).joinBet(0, stake1, true);
     console.log(`Participant 1 joined with ${ethers.formatEther(stake1)} cUSD on TRUE`);
     
     // Participant 2 bets FALSE (opposite of creator)
     const stake2 = ethers.parseEther("75");
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
     await bettingContract.connect(participant2).joinBet(0, stake2, false);
     console.log(`Participant 2 joined with ${ethers.formatEther(stake2)} cUSD on FALSE`);
     
     // Participant 3 bets TRUE (same as creator)
     const stake3 = ethers.parseEther("60");
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
     await bettingContract.connect(participant3).joinBet(0, stake3, true);
     console.log(`Participant 3 joined with ${ethers.formatEther(stake3)} cUSD on TRUE`);
     
     // Get bet details
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
     const betDetails = await bettingContract.getBetDetails(0);
     console.log("\nBet Details:");
     console.log(`- Creator: ${betDetails[0]}`);
@@ -123,22 +117,18 @@ async function main() {
     console.log("\n=== PHASE 4: Resolution voting ===");
     
     // Creator votes
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
-    await bettingContract.submitResolutionOutcome(0, true);
+    await bettingContract.connect(owner).submitResolutionOutcome(0, true);
     console.log("Creator voted TRUE");
     
     // Participant 1 votes
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
     await bettingContract.connect(participant1).submitResolutionOutcome(0, true);
     console.log("Participant 1 voted TRUE");
     
     // Participant 2 votes
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
     await bettingContract.connect(participant2).submitResolutionOutcome(0, false);
     console.log("Participant 2 voted FALSE");
     
     // Participant 3 votes
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
     await bettingContract.connect(participant3).submitResolutionOutcome(0, true);
     console.log("Participant 3 voted TRUE");
     
@@ -154,7 +144,7 @@ async function main() {
     console.log("\n=== PHASE 6: Finalizing bet resolution ===");
     
     // Get balances before finalizing
-    const balancesBefore: Record<string, bigint> = {};
+    const balancesBefore = new Map<string, bigint>();
     for (const [name, signer] of [
       ["Owner", owner],
       ["Participant 1", participant1],
@@ -162,22 +152,50 @@ async function main() {
       ["Participant 3", participant3]
     ] as const) {
       const address = await signer.getAddress();
-      // @ts-ignore - Ignoring TypeScript errors for contract method calls
-      balancesBefore[name] = await cUSDToken.balanceOf(address);
-      console.log(`${name} balance before: ${ethers.formatEther(balancesBefore[name])} cUSD`);
+      const balance = await cUSDToken.balanceOf(address);
+      balancesBefore.set(name, balance);
+      console.log(`${name} balance before: ${ethers.formatEther(balance)} cUSD`);
+    }
+    
+    // Sicherstellen, dass der Betting-Vertrag genügend Token für Yield-Zahlungen hat
+    const contractBalanceBefore = await cUSDToken.balanceOf(bettingContractAddress);
+    
+    // Berechne benötigten Yield
+    const totalStake = betDetails[4] + betDetails[5]; // totalStakeTrue + totalStakeFalse
+    const yieldRateBN = await bettingContract.yieldRate();
+    const yieldRate = Number(yieldRateBN);
+    const requiredYield = totalStake * BigInt(yieldRate) / BigInt(100);
+    
+    // Prüfen, ob genügend Token im Vertrag sind
+    if (contractBalanceBefore < totalStake + requiredYield) {
+      console.log(`Contract needs additional tokens for yield payments`);
+      console.log(`Current balance: ${ethers.formatEther(contractBalanceBefore)} cUSD`);
+      console.log(`Total stake: ${ethers.formatEther(totalStake)} cUSD`);
+      console.log(`Required yield: ${ethers.formatEther(requiredYield)} cUSD`);
+      
+      const additionalTokensNeeded = totalStake + requiredYield - contractBalanceBefore;
+      const extraTokens = ethers.parseEther("5"); // 5 extra cUSD as safety margin
+      const amountToMint = additionalTokensNeeded + extraTokens;
+      
+      // Mint additional tokens to the contract
+      await cUSDToken.connect(owner).mint(bettingContractAddress, amountToMint);
+      console.log(`Minted ${ethers.formatEther(amountToMint)} additional cUSD to betting contract for yield payments`);
+      
+      const newContractBalance = await cUSDToken.balanceOf(bettingContractAddress);
+      console.log(`New contract balance: ${ethers.formatEther(newContractBalance)} cUSD`);
+    } else {
+      console.log(`Contract has sufficient tokens for yield payments: ${ethers.formatEther(contractBalanceBefore)} cUSD`);
     }
     
     try {
       // Try automatic finalization (should work as TRUE side has majority)
-      // @ts-ignore - Ignoring TypeScript errors for contract method calls
-      const finalizeTx = await bettingContract.finalizeResolution(0);
+      const finalizeTx = await bettingContract.connect(owner).finalizeResolution(0);
       await finalizeTx.wait();
-      console.log("Bet automatically finalized based on 80% supermajority!");
+      console.log("Bet automatically finalized based on supermajority!");
     } catch (error) {
       console.log("Automatic finalization failed, trying admin finalization...");
       // Fallback to admin finalization
-      // @ts-ignore - Ignoring TypeScript errors for contract method calls
-      const adminFinalizeTx = await bettingContract.adminFinalizeResolution(0, true, false);
+      const adminFinalizeTx = await bettingContract.connect(owner).adminFinalizeResolution(0, true, false);
       await adminFinalizeTx.wait();
       console.log("Bet resolved by admin with TRUE as the winning outcome");
     }
@@ -186,7 +204,6 @@ async function main() {
     console.log("\n=== PHASE 7: Checking results and final balances ===");
     
     // Get bet details after resolution
-    // @ts-ignore - Ignoring TypeScript errors for contract method calls
     const resolvedBetDetails = await bettingContract.getBetDetails(0);
     console.log("Resolved Bet Details:");
     console.log(`- Resolved: ${resolvedBetDetails[3]}`);
@@ -202,9 +219,9 @@ async function main() {
       ["Participant 3", participant3]
     ] as const) {
       const address = await signer.getAddress();
-      // @ts-ignore - Ignoring TypeScript errors for contract method calls
       const balanceAfter = await cUSDToken.balanceOf(address);
-      const difference = balanceAfter - balancesBefore[name];
+      const previousBalance = balancesBefore.get(name) || BigInt(0);
+      const difference = balanceAfter - previousBalance;
       
       console.log(`${name} balance after: ${ethers.formatEther(balanceAfter)} cUSD`);
       console.log(`${name} difference: ${ethers.formatEther(difference)} cUSD`);

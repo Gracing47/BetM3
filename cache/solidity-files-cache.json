@@ -625,8 +625,8 @@
       ]
     },
     "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\MockERC20.sol": {
-      "lastModificationDate": 1741173030596,
-      "contentHash": "ee24bc04ad8985b01b3fa44df0d10ceb",
+      "lastModificationDate": 1741203013714,
+      "contentHash": "211ca32557d5d6e538e8b14d86529d55",
       "sourceName": "packages/hardhat/contracts/MockERC20.sol",
       "solcConfig": {
         "version": "0.8.19",
@@ -700,8 +700,8 @@
       ]
     },
     "C:\\Users\\thoms\\Desktop\\code\\Celo\\bet-m-3\\packages\\hardhat\\contracts\\NoLossBetMulti.sol": {
-      "lastModificationDate": 1741188818483,
-      "contentHash": "d716ffbe7dd4781c397451196e33756f",
+      "lastModificationDate": 1741203042849,
+      "contentHash": "7ea176d912108b1230024e4735015a0d",
       "sourceName": "packages/hardhat/contracts/NoLossBetMulti.sol",
       "solcConfig": {
         "version": "0.8.19",
