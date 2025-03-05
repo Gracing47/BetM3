@@ -1,5 +1,0 @@
-// This file re-exports from web3Context.ts for backward compatibility
-import { Web3Context, Web3ContextType, useWeb3 } from './web3Context';
-
-export { Web3Context, Web3ContextType, useWeb3 };
-export default Web3Context;

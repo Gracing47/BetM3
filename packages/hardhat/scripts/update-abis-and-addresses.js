@@ -14,14 +14,12 @@ if (!fs.existsSync(outputDir)) {
   fs.mkdirSync(outputDir, { recursive: true });
 }
 
-// Contracts to generate ABIs for
+// Aktualisierte Verträge gemäß dem neuen No-Loss-Betting-System
 const contracts = [
-  'NoLossBet.sol/NoLossBet.json',
-  'MockCELO.sol/MockCELO.json',
-  'BetM3Token.sol/BetM3Token.json',
-  'UniswapPoolMock.sol/UniswapPoolMock.json',
+  'NoLossBetMulti.sol/NoLossBetMulti.json',
+  'BettingManagerFactory.sol/BettingManagerFactory.json',
   'cUSDToken.sol/cUSDToken.json',
-  'LPToken.sol/LPToken.json'
+  'MockERC20.sol/ERC20MockToken.json'
 ];
 
 // Read deployment info
@@ -29,8 +27,8 @@ function updateContractAddresses() {
   try {
     console.log('Updating contract addresses...');
     
-    // Read the deployment file
-    const deploymentPath = path.join(hardhatDir, 'deployment-localhost.json');
+    // Das neue Deployment-File für das Betting-System
+    const deploymentPath = path.join(hardhatDir, 'deployment-betting-localhost.json');
     if (!fs.existsSync(deploymentPath)) {
       console.error(`Deployment file not found at: ${deploymentPath}`);
       return false;
