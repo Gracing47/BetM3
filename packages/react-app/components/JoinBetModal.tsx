@@ -7,15 +7,14 @@ interface JoinBetModalProps {
   bet: {
     id: string;
     creator: string;
-    opponent: string;
-    amount: string;
-    opponentStake: string;
     condition: string;
-    creatorOutcome: boolean | null;
-    opponentOutcome: boolean | null;
-    resolved: boolean;
     expirationTime: number;
-    status: 'Created' | 'Active' | 'Completed' | 'Cancelled';
+    resolved: boolean;
+    totalStakeTrue: string;
+    totalStakeFalse: string;
+    resolutionFinalized: boolean;
+    winningOutcome: boolean;
+    status: 'Created' | 'Active' | 'Expired' | 'Completed';
   };
   onClose: () => void;
   onJoin: (prediction: boolean, stake?: string) => Promise<void>;
@@ -32,17 +31,17 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
   const [stakeOption, setStakeOption] = useState<'default' | '10' | '100' | 'custom'>('default');
   const [isJoining, setIsJoining] = useState<boolean>(false);
 
-  // Berechne den tatsächlichen Einsatz basierend auf der ausgewählten Option
+  // Calculate the stake amount based on the selected option
   const getStakeAmount = () => {
     switch (stakeOption) {
       case '10':
-        return ethers.parseEther('10').toString();
+        return '10';
       case '100':
-        return ethers.parseEther('100').toString();
+        return '100';
       case 'custom':
-        return customStake ? ethers.parseEther(customStake).toString() : bet.opponentStake;
+        return customStake ? customStake : '50'; // Default to 50 if empty
       default:
-        return bet.opponentStake;
+        return '50'; // Default stake amount
     }
   };
 
@@ -109,36 +108,37 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
   };
 
   const handleMintCELO = async () => {
-    setIsMinting(true);
     setError(null);
     setMintSuccess(false);
+    setIsMinting(true);
     
     try {
       // Mint enough CELO tokens to join the bet (add a little extra for gas)
       const stakeAmount = stakeOption === 'default' 
-        ? parseFloat(ethers.formatEther(bet.opponentStake)) 
+        ? parseFloat(ethers.formatEther(bet.totalStakeTrue || '0')) 
         : stakeOption === 'custom' 
           ? parseFloat(customStake || "0") 
-          : parseInt(stakeOption);
-          
-      const amountToMint = (stakeAmount + 10).toString();
-      await mintCELO(amountToMint);
-      setMintSuccess(true);
+          : stakeOption === '10' 
+            ? 10 
+            : 100;
       
-      // Hide success message after 5 seconds
-      setTimeout(() => {
-        setMintSuccess(false);
-      }, 5000);
-    } catch (err: any) {
-      console.error('Error minting CELO:', err);
-      setError(err.message || 'Failed to mint CELO tokens. Please try again.');
+      // Add a little extra for gas
+      const mintAmount = Math.ceil(stakeAmount + 5).toString();
+      
+      const tx = await mintCELO(mintAmount);
+      console.log("Minted CELO:", tx);
+      
+      setMintSuccess(true);
+    } catch (error: any) {
+      console.error("Error minting CELO:", error);
+      setError(`Failed to mint CELO: ${error.message || "Unknown error"}`);
     } finally {
       setIsMinting(false);
     }
   };
 
   // Formatieren des ursprünglichen Einsatzes
-  const defaultStakeAmount = ethers.formatEther(bet.opponentStake || '0');
+  const defaultStakeAmount = ethers.formatEther(bet.totalStakeTrue || '0');
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -163,7 +163,7 @@ const JoinBetModal: React.FC<JoinBetModalProps> = ({ bet, onClose, onJoin, isLoa
         <div className="grid grid-cols-2 gap-4 text-sm mb-6">
           <div>
             <p className="text-gray-500">Creator Stake</p>
-            <p className="font-medium">{formatTokenAmount(bet.amount, 'CELO')}</p>
+            <p className="font-medium">{formatTokenAmount(bet.totalStakeTrue, 'CELO')}</p>
           </div>
           <div>
             <p className="text-gray-500">Expires In</p>

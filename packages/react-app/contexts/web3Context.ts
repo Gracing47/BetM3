@@ -13,9 +13,10 @@ export interface Web3ContextType {
   mintCELO: (amount: string) => Promise<any>;
   getCELOBalance: (address?: string) => Promise<bigint>;
   getUserAddress: () => Promise<string>;
-  createBet: (creatorStake: string, opponentStake: string, condition: string, durationDays: string, prediction: boolean) => Promise<any>;
+  createBet: (creatorStake: string, condition: string, durationDays: string, prediction: boolean) => Promise<any>;
   acceptBet: (betId: string, prediction: boolean, customStake?: string) => Promise<any>;
   getBet: (betId: string) => Promise<any>;
+  getParticipantStake: (betId: string, participant: string) => Promise<string>;
   getNextBetId: () => Promise<number>;
   approveToken: (amount: string) => Promise<any>;
   getNoLossBetAddress: () => string;

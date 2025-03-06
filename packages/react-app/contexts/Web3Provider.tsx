@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { Web3Context, Web3ContextType } from './web3Context';
-import { NoLossBetABI, MockCELOABI } from '../abis/generated/index';
+import { NoLossBetMultiABI, cUSDTokenABI } from '../abis/generated/index';
 import { CONTRACT_ADDRESSES } from '../config/contracts';
 
 // Use the imported contract addresses
@@ -129,26 +129,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [address]);
 
-  const getNoLossBetContract = useCallback(() => {
-    if (!signer) throw new Error("Wallet not connected");
-    
-    return new ethers.Contract(
-      NO_LOSS_BET_ADDRESS,
-      NoLossBetABI,
-      signer
-    );
-  }, [signer]);
-
-  const getMockCELOContract = useCallback(() => {
-    if (!signer) throw new Error("Wallet not connected");
-    
-    return new ethers.Contract(
-      MOCK_CELO_ADDRESS,
-      MockCELOABI,
-      signer
-    );
-  }, [signer]);
-
   const getNoLossBetAddress = useCallback((): string => {
     return NO_LOSS_BET_ADDRESS;
   }, []);
@@ -157,9 +137,38 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     return MOCK_CELO_ADDRESS;
   }, []);
 
+  const getMockCELOContract = useCallback(() => {
+    if (!signer) {
+      throw new Error("Signer is not available");
+    }
+    return new ethers.Contract(MOCK_CELO_ADDRESS, cUSDTokenABI, signer);
+  }, [signer]);
+
+  const getNoLossBetContract = useCallback(() => {
+    if (!signer) {
+      throw new Error("Signer is not available");
+    }
+    return new ethers.Contract(NO_LOSS_BET_ADDRESS, NoLossBetMultiABI, signer);
+  }, [signer]);
+
+  const approveToken = useCallback(async (amount: string): Promise<any> => {
+    try {
+      const celoContract = getMockCELOContract();
+      const amountWei = ethers.parseEther(amount);
+      
+      const tx = await celoContract.approve(NO_LOSS_BET_ADDRESS, amountWei, {
+        gasLimit: 200000
+      });
+      
+      return await tx.wait();
+    } catch (error) {
+      console.error("Error approving tokens:", error);
+      throw error;
+    }
+  }, [getMockCELOContract]);
+
   const createBet = useCallback(async (
     creatorStake: string,
-    opponentStake: string,
     condition: string,
     durationDays: string,
     prediction: boolean
@@ -167,7 +176,6 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const contract = getNoLossBetContract();
       const creatorStakeWei = ethers.parseEther(creatorStake);
-      const opponentStakeWei = ethers.parseEther(opponentStake);
       const durationDaysBigInt = BigInt(durationDays);
       
       // Approve tokens first
@@ -175,9 +183,9 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const tx = await contract.createBet(
         creatorStakeWei,
-        opponentStakeWei,
         condition,
         durationDaysBigInt,
+        prediction,
         { gasLimit: 5000000 }
       );
       
@@ -186,7 +194,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error("Error creating bet:", error);
       throw error;
     }
-  }, [getNoLossBetContract]);
+  }, [getNoLossBetContract, approveToken]);
 
   const acceptBet = useCallback(async (
     betId: string,
@@ -205,38 +213,40 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
         await approveToken(customStake);
       }
       
-      const tx = await contract.acceptBet(
+      // Use joinBet instead of acceptBet for NoLossBetMulti
+      const tx = await contract.joinBet(
         betIdNumber,
-        prediction,
         customStakeWei,
+        prediction,
         { gasLimit: 5000000 }
       );
       
       return await tx.wait();
     } catch (error) {
-      console.error("Error accepting bet:", error);
+      console.error("Error joining bet:", error);
       throw error;
     }
-  }, [getNoLossBetContract]);
+  }, [getNoLossBetContract, approveToken]);
 
   const getBet = useCallback(async (betId: string): Promise<any> => {
     try {
       const contract = getNoLossBetContract();
-      const bet = await contract.bets(betId);
+      // Use getBetDetails for NoLossBetMulti contract
+      const bet = await contract.getBetDetails(betId);
       
       return {
         id: betId,
-        creator: bet.creator,
-        opponent: bet.opponent,
-        amount: bet.creatorStake.toString(),
-        opponentStake: bet.opponentStake.toString(),
-        condition: bet.condition,
-        creatorOutcome: bet.creatorOutcome,
-        opponentOutcome: bet.opponentOutcome,
-        resolved: bet.resolved,
-        expirationTime: Number(bet.expiration),
-        status: bet.resolved ? 'Completed' : 
-                bet.opponent !== ethers.ZeroAddress ? 'Active' : 'Created'
+        creator: bet[0], // creator address
+        condition: bet[1], // condition
+        expirationTime: Number(bet[2]), // expiration
+        resolved: bet[3], // resolved
+        totalStakeTrue: bet[4].toString(), // totalStakeTrue
+        totalStakeFalse: bet[5].toString(), // totalStakeFalse
+        resolutionFinalized: bet[6], // resolutionFinalized
+        winningOutcome: bet[7], // winningOutcome
+        // Updated status based on NoLossBetMulti structure
+        status: bet[3] ? 'Completed' : 
+                (Number(bet[2]) < Date.now()/1000) ? 'Expired' : 'Active'
       };
     } catch (error) {
       console.error("Error getting bet:", error);
@@ -244,10 +254,22 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [getNoLossBetContract]);
 
+  const getParticipantStake = useCallback(async (betId: string, participant: string): Promise<string> => {
+    try {
+      const contract = getNoLossBetContract();
+      const stake = await contract.getParticipantStake(betId, participant);
+      return stake.toString();
+    } catch (error) {
+      console.error("Error getting participant stake:", error);
+      return "0";
+    }
+  }, [getNoLossBetContract]);
+
   const getNextBetId = useCallback(async (): Promise<number> => {
     try {
       const contract = getNoLossBetContract();
-      const nextBetId = await contract.nextBetId();
+      // Use betCounter instead of nextBetId in NoLossBetMulti
+      const nextBetId = await contract.betCounter();
       return Number(nextBetId);
     } catch (error) {
       console.error("Error getting next bet ID:", error);
@@ -258,10 +280,11 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   const submitOutcome = useCallback(async (betId: string, outcome: boolean): Promise<any> => {
     try {
       const contract = getNoLossBetContract();
-      const tx = await contract.submitOutcome(betId, outcome, { gasLimit: 500000 });
+      // Use submitResolutionOutcome instead of submitOutcome
+      const tx = await contract.submitResolutionOutcome(betId, outcome, { gasLimit: 500000 });
       return tx;
     } catch (error) {
-      console.error("Error submitting outcome:", error);
+      console.error("Error submitting resolution outcome:", error);
       throw error;
     }
   }, [getNoLossBetContract]);
@@ -269,29 +292,14 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
   const resolveBet = useCallback(async (betId: string): Promise<any> => {
     try {
       const contract = getNoLossBetContract();
-      const tx = await contract.resolveBet(betId, { gasLimit: 500000 });
+      // Use finalizeResolution instead of resolveBet
+      const tx = await contract.finalizeResolution(betId, { gasLimit: 500000 });
       return tx;
     } catch (error) {
-      console.error("Error resolving bet:", error);
+      console.error("Error finalizing bet resolution:", error);
       throw error;
     }
   }, [getNoLossBetContract]);
-
-  const approveToken = useCallback(async (amount: string): Promise<any> => {
-    try {
-      const celoContract = getMockCELOContract();
-      const amountWei = ethers.parseEther(amount);
-      
-      const tx = await celoContract.approve(NO_LOSS_BET_ADDRESS, amountWei, {
-        gasLimit: 200000
-      });
-      
-      return await tx.wait();
-    } catch (error) {
-      console.error("Error approving tokens:", error);
-      throw error;
-    }
-  }, [getMockCELOContract]);
 
   const mintCELO = useCallback(async (amount: string): Promise<any> => {
     try {
@@ -332,6 +340,7 @@ export const Web3Provider: React.FC<{ children: React.ReactNode }> = ({ children
     createBet,
     acceptBet,
     getBet,
+    getParticipantStake,
     getNextBetId,
     submitOutcome,
     resolveBet,

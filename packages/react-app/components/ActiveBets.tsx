@@ -4,28 +4,29 @@ import BetDisplay from "./BetDisplay";
 import JoinBetModal from "./JoinBetModal";
 import { formatTokenAmount } from "../utils/format";
 import { ethers } from 'ethers';
-import { NoLossBetABI } from "../abis/generated";
+import { NoLossBetMultiABI } from "../abis/generated";
 
 interface Bet {
   id: string;
   creator: string;
-  opponent: string;
-  amount: string;
-  opponentStake: string;
   condition: string;
-  creatorOutcome: boolean | null;
-  opponentOutcome: boolean | null;
-  resolved: boolean;
   expirationTime: number;
-  status: 'Created' | 'Active' | 'Completed' | 'Cancelled';
+  resolved: boolean;
+  totalStakeTrue: string;
+  totalStakeFalse: string;
+  resolutionFinalized: boolean;
+  winningOutcome: boolean;
+  status: 'Created' | 'Active' | 'Expired' | 'Completed';
   commentText?: string; // Optional comment text
 }
 
 interface BetEvent {
   betId: string;
   creator: string;
-  amount: string;
   condition: string;
+  expiration: string;
+  creatorPrediction: boolean;
+  creatorStake: string;
 }
 
 interface ActiveBetsProps {
@@ -95,7 +96,7 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({
         
         const noLossBet = new ethers.Contract(
           NO_LOSS_BET_ADDRESS,
-          NoLossBetABI,
+          NoLossBetMultiABI,
           provider
         );
         console.log("NoLossBet contract initialized at address:", NO_LOSS_BET_ADDRESS);
@@ -113,33 +114,40 @@ export const ActiveBets: React.FC<ActiveBetsProps> = ({
             for (let i = 0; i < betCounter; i++) {
               try {
                 console.log(`Loading bet ${i} directly`);
-                const betDetails = await noLossBet.bets(i);
+                const betDetails = await noLossBet.getBetDetails(i);
                 console.log(`Got details for bet ${i}:`, betDetails);
                 
-                if (betDetails && betDetails.creator !== ethers.ZeroAddress) {
+                if (betDetails && betDetails[0] !== ethers.ZeroAddress) {
                   // Determine status based on bet details
-                  let status: 'Created' | 'Active' | 'Completed' | 'Cancelled' = 'Created';
-                  if (betDetails.opponent !== ethers.ZeroAddress) {
-                    status = 'Active';
-                  }
-                  if (betDetails.resolved) {
+                  let status: 'Created' | 'Active' | 'Expired' | 'Completed' = 'Created';
+                  
+                  const creator = betDetails[0];            // creator
+                  const condition = betDetails[1];          // condition
+                  const expiration = Number(betDetails[2]); // expiration
+                  const resolved = betDetails[3];           // resolved
+                  const totalStakeTrue = betDetails[4].toString(); // totalStakeTrue
+                  const totalStakeFalse = betDetails[5].toString(); // totalStakeFalse
+                  const resolutionFinalized = betDetails[6]; // resolutionFinalized
+                  const winningOutcome = betDetails[7];     // winningOutcome
+                  
+                  if (resolved) {
                     status = 'Completed';
-                  }
-                  if (betDetails.expiration < Math.floor(Date.now() / 1000)) {
-                    status = 'Cancelled';
+                  } else if (expiration < Math.floor(Date.now() / 1000)) {
+                    status = 'Expired';
+                  } else if (totalStakeTrue !== '0' || totalStakeFalse !== '0') {
+                    status = 'Active';
                   }
                   
                   directBets.push({
                     id: i.toString(),
-                    creator: betDetails.creator,
-                    opponent: betDetails.opponent,
-                    amount: betDetails.creatorStake.toString(),
-                    opponentStake: betDetails.opponentStake.toString(),
-                    condition: betDetails.condition,
-                    creatorOutcome: betDetails.creatorOutcome,
-                    opponentOutcome: betDetails.opponentOutcome,
-                    resolved: betDetails.resolved,
-                    expirationTime: Number(betDetails.expiration),
+                    creator,
+                    condition,
+                    expirationTime: expiration,
+                    resolved,
+                    totalStakeTrue,
+                    totalStakeFalse,
+                    resolutionFinalized,
+                    winningOutcome,
                     status
                   });
                 }
